@@ -123,6 +123,8 @@ npm start
 - рабочие данные находятся в `project/.npm-cache/studio-vkusa-data/` и не входят в Git;
 - детали сборки и обновления описаны в [`web/README.md`](web/README.md).
 
+Порядок подключения основного домена к этому хостингу и задача для администратора публичного proxy описаны в [`deploy/client1-domain.md`](deploy/client1-domain.md).
+
 Для собственного VPS предусмотрен запуск за nginx:
 
 ```text
