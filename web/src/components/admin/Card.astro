@@ -1,0 +1,8 @@
+---
+interface Props { title?: string; class?: string; sub?: string }
+const { title, class: cls = '', sub } = Astro.props;
+---
+<section class:list={['rounded-2xl border border-line bg-white p-5', cls]}>
+  {title && <header class="mb-4 flex items-baseline justify-between gap-3"><h2 class="font-sans text-[15px] font-bold">{title}</h2>{sub && <span class="text-xs text-ink-soft">{sub}</span>}<slot name="aside" /></header>}
+  <slot />
+</section>

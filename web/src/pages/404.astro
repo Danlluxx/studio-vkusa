@@ -1,0 +1,14 @@
+---
+import Layout from '../layouts/Layout.astro';
+Astro.response.status = 404;
+---
+<Layout title="Страница не найдена — Студия Вкуса" description="Такой страницы нет." noindex>
+  <section class="section">
+    <div class="container-x text-center">
+      <p class="font-display text-[8rem] italic leading-none text-brand sm:text-[12rem]">404</p>
+      <h1 class="mt-2 text-3xl font-semibold sm:text-5xl">Здесь пусто, как на столе после фуршета</h1>
+      <p class="mx-auto mt-4 max-w-md text-ink-soft">Страница не найдена. Вернитесь на главную или посмотрите меню.</p>
+      <div class="mt-8 flex justify-center gap-3"><a href="/" class="btn btn-primary">На главную</a><a href="/menu/" class="btn btn-ghost">Меню</a></div>
+    </div>
+  </section>
+</Layout>

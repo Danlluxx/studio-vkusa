@@ -1,0 +1,49 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { all, run, audit } from '../../../lib/db';
+import { str, back, fmtDate, pager } from '../../../lib/admin';
+import { saveImage, deleteImage } from '../../../lib/uploads';
+const u = Astro.locals.user!;
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData(), act = str(fd, 'action');
+  try {
+    if (act === 'upload') {
+      const files = (fd.getAll('files') as File[]).filter((f) => f.size);
+      if (!files.length) throw new Error('Выберите файлы');
+      for (const f of files) await saveImage(f);
+      audit(u.login, 'upload', 'media', undefined, { count: files.length });
+      return Astro.redirect(back('/admin/media/', 'ok', `Загружено: ${files.length}`));
+    }
+    if (act === 'delete') {
+      const id = str(fd, 'id'), ref = `/u/${id}`;
+      const used = all<any>('SELECT (SELECT COUNT(*) FROM items WHERE image=?) a, (SELECT COUNT(*) FROM reports WHERE image=?) b', ref, ref)[0];
+      if (used.a + used.b) throw new Error('Файл используется на сайте — сначала замените его в блюде или фотоотчёте');
+      deleteImage(ref); audit(u.login, 'delete', 'media', id);
+      return Astro.redirect(back('/admin/media/', 'ok', 'Удалено'));
+    }
+  } catch (e: any) { return Astro.redirect(back('/admin/media/', 'err', e.message)); }
+}
+const total = all<any>('SELECT COUNT(*) n, COALESCE(SUM(bytes),0) b FROM media')[0];
+const pg = pager(total.n, Number(Astro.url.searchParams.get('page') || 1), 36);
+const rows = all<any>('SELECT * FROM media ORDER BY created_at DESC LIMIT ? OFFSET ?', pg.size, pg.offset);
+const usage = (id: string) => all<any>('SELECT (SELECT COUNT(*) FROM items WHERE image=?)+(SELECT COUNT(*) FROM reports WHERE image=?) n', `/u/${id}`, `/u/${id}`)[0].n;
+---
+<AdminLayout title="Медиатека">
+  <form method="post" enctype="multipart/form-data" class="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-dashed border-line bg-white p-5">
+    <input type="hidden" name="action" value="upload" />
+    <input type="file" name="files" accept="image/*" multiple required class="text-sm" />
+    <button class="btn btn-primary !py-2">Загрузить фото</button>
+    <span class="text-sm text-ink-soft">Загружено через админку: {total.n} шт., {(total.b / 1048576).toFixed(1)} МБ. Фото старого сайта (около 400 шт.) уже оптимизированы и лежат в системе.</span>
+  </form>
+  <div class="grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-6">
+    {rows.map((m) => (
+      <figure class="overflow-hidden rounded-2xl border border-line bg-white">
+        <img src={`/u/${m.id}-${JSON.parse(m.widths)[0]}.webp`} alt="" class="aspect-square w-full object-cover" loading="lazy" />
+        <figcaption class="p-3 text-xs"><p class="truncate font-semibold" title={m.name}>{m.name}</p><p class="text-ink-soft">{m.w}×{m.h} · {fmtDate(m.created_at, false)}</p><p class="text-ink-soft">{usage(m.id) ? `используется: ${usage(m.id)}` : 'не используется'}</p>
+          {!usage(m.id) && <form method="post" class="mt-1"><input type="hidden" name="action" value="delete" /><input type="hidden" name="id" value={m.id} /><button data-confirm="Удалить файл?" class="text-ink-soft underline hover:text-brand">Удалить</button></form>}
+        </figcaption>
+      </figure>
+    ))}
+    {!rows.length && <p class="col-span-full py-10 text-center text-ink-soft">Загруженных вручную фото пока нет.</p>}
+  </div>
+</AdminLayout>

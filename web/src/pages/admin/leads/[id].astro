@@ -1,0 +1,77 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { one, all, run, audit, now } from '../../../lib/db';
+import { STATUSES, fmtDate, str, back } from '../../../lib/admin';
+
+const u = Astro.locals.user!;
+const id = Number(Astro.params.id);
+const l = one<any>('SELECT * FROM leads WHERE id=?', id);
+if (!l) return new Response(null, { status: 404 });
+const self = `/admin/leads/${id}/`;
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  if (str(fd, 'delete') === '1') {
+    if (u.role !== 'admin') return Astro.redirect(back(self, 'err', 'Удалять заявки может только администратор'));
+    run('DELETE FROM leads WHERE id=?', id); audit(u.login, 'delete', 'lead', id, { name: l.name, phone: l.phone });
+    return Astro.redirect(back('/admin/leads/', 'ok', `Заявка №${id} удалена`));
+  }
+  const st = STATUSES[str(fd, 'status')] ? str(fd, 'status') : l.status;
+  run('UPDATE leads SET status=?, manager_comment=?, amount=?, assignee=?, updated_at=? WHERE id=?', st, str(fd, 'manager_comment'), Number(str(fd, 'amount')) || null, str(fd, 'assignee'), now(), id);
+  audit(u.login, 'update', 'lead', id, { status: st });
+  return Astro.redirect(back(self, 'ok', 'Сохранено'));
+}
+const items = JSON.parse(l.items || '[]');
+const journey = l.sid ? all<any>('SELECT ts,type,path,label FROM events WHERE sid=? ORDER BY ts LIMIT 60', l.sid) : [];
+const same = all<any>('SELECT id,ts,status FROM leads WHERE phone=? AND id<>? ORDER BY ts DESC', l.phone, id);
+const T: Record<string, string> = { pageview: 'Просмотр', add_basket: 'Добавил блюдо', lead_open: 'Открыл форму', lead_submit: 'Отправил заявку', click_phone: 'Клик по телефону', click_wa: 'Клик WhatsApp', click_tg: 'Клик Telegram', click_max: 'Клик MAX', click_email: 'Клик e-mail' };
+const users = all<any>('SELECT name,login FROM users WHERE active=1');
+---
+<AdminLayout title={`Заявка №${id}`}>
+  <a href="/admin/leads/" class="mb-4 inline-block text-sm font-semibold text-brand">← Все заявки</a>
+  <div class="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+    <div class="space-y-5">
+      <section class="rounded-2xl border border-line bg-white p-6">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div><h2 class="font-display text-3xl font-semibold">{l.name}</h2><a href={`tel:${l.phone}`} class="text-lg font-bold text-brand">{l.phone}</a></div>
+          <span class:list={['rounded-full px-3 py-1 text-sm font-bold', STATUSES[l.status]?.cls]}>{STATUSES[l.status]?.name}</span>
+        </div>
+        <dl class="mt-5 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
+          <div><dt class="text-ink-soft">Получена</dt><dd class="font-semibold">{fmtDate(l.ts)}</dd></div>
+          <div><dt class="text-ink-soft">Дата мероприятия</dt><dd class="font-semibold">{l.date || '—'}</dd></div>
+          <div><dt class="text-ink-soft">Гостей</dt><dd class="font-semibold">{l.guests || '—'}</dd></div>
+          <div><dt class="text-ink-soft">Страница отправки</dt><dd class="font-semibold">{l.page || '—'}</dd></div>
+          <div><dt class="text-ink-soft">Источник</dt><dd class="font-semibold">{l.source} / {l.medium}{l.campaign && ` / ${l.campaign}`}</dd></div>
+          <div><dt class="text-ink-soft">Устройство</dt><dd class="font-semibold">{l.device}</dd></div>
+        </dl>
+        {l.comment && <div class="mt-5 rounded-xl bg-cream p-4 text-[15px]"><p class="text-xs font-semibold uppercase tracking-wider text-ink-soft">Пожелания клиента</p><p class="mt-1 whitespace-pre-line">{l.comment}</p></div>}
+        {items.length > 0 && (
+          <div class="mt-5"><p class="text-xs font-semibold uppercase tracking-wider text-ink-soft">Выбранные блюда</p>
+            <ul class="mt-2 divide-y divide-line rounded-xl border border-line">{items.map((i: any) => <li class="flex justify-between gap-3 px-4 py-2.5 text-sm"><span>{i.name}{i.unit && <span class="ml-2 text-xs text-ink-soft">{i.unit}</span>}</span><b>× {i.qty}</b></li>)}</ul></div>
+        )}
+      </section>
+
+      <section class="rounded-2xl border border-line bg-white p-6">
+        <h2 class="font-sans text-[15px] font-bold">Путь клиента по сайту</h2>
+        {journey.length ? (
+          <ol class="mt-4 space-y-2 border-l-2 border-line pl-5 text-sm">
+            {journey.map((e) => <li class="relative"><i class:list={['absolute -left-[27px] top-1.5 h-2.5 w-2.5 rounded-full', e.type === 'pageview' ? 'bg-ink/40' : 'bg-brand']}></i><span class="text-xs text-ink-soft">{fmtDate(e.ts).slice(11)}</span> · {T[e.type] || e.type} <span class="text-ink-soft">{e.type === 'pageview' ? e.path : e.label || e.path}</span></li>)}
+          </ol>
+        ) : <p class="mt-3 text-sm text-ink-soft">История посещений недоступна (клиент отключил cookie или заявка создана вручную).</p>}
+      </section>
+    </div>
+
+    <aside class="space-y-5">
+      <form method="post" class="rounded-2xl border border-line bg-white p-6">
+        <h2 class="font-sans text-[15px] font-bold">Работа с заявкой</h2>
+        <label class="mt-4 grid gap-1.5 text-sm font-semibold">Статус<select name="status" class="field">{Object.entries(STATUSES).map(([k, v]) => <option value={k} selected={l.status === k}>{v.name}</option>)}</select></label>
+        <label class="mt-4 grid gap-1.5 text-sm font-semibold">Ответственный<input name="assignee" value={l.assignee || ''} list="users" class="field" /><datalist id="users">{users.map((x) => <option value={x.name || x.login} />)}</datalist></label>
+        <label class="mt-4 grid gap-1.5 text-sm font-semibold">Сумма заказа, ₽<input name="amount" type="number" min="0" value={l.amount ?? ''} class="field" /></label>
+        <label class="mt-4 grid gap-1.5 text-sm font-semibold">Комментарий менеджера<textarea name="manager_comment" rows="4" class="field">{l.manager_comment || ''}</textarea></label>
+        <button class="btn btn-primary mt-5 w-full">Сохранить</button>
+        <p class="mt-3 text-xs text-ink-soft">Обновлено: {fmtDate(l.updated_at)}</p>
+      </form>
+      {same.length > 0 && <section class="rounded-2xl border border-line bg-white p-6"><h2 class="font-sans text-[15px] font-bold">Другие заявки с этим номером</h2><ul class="mt-3 space-y-1.5 text-sm">{same.map((x) => <li><a class="text-brand hover:underline" href={`/admin/leads/${x.id}/`}>№{x.id}</a> · {fmtDate(x.ts)} · {STATUSES[x.status]?.name}</li>)}</ul></section>}
+      {u.role === 'admin' && <form method="post"><input type="hidden" name="delete" value="1" /><button data-confirm="Удалить заявку безвозвратно?" class="text-sm text-ink-soft underline hover:text-brand">Удалить заявку</button></form>}
+    </aside>
+  </div>
+</AdminLayout>

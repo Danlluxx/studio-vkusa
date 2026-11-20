@@ -1,0 +1,17 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { all, one } from '../../lib/db';
+import { fmtDate, pager } from '../../lib/admin';
+if (Astro.locals.user!.role !== 'admin') return new Response('Недостаточно прав', { status: 403 });
+const q = Astro.url.searchParams, who = q.get('u') || '';
+const W = who ? 'WHERE user=?' : '', a = who ? [who] : [];
+const pg = pager(one<any>(`SELECT COUNT(*) n FROM audit ${W}`, ...a)!.n, Number(q.get('page') || 1), 50);
+const rows = all<any>(`SELECT * FROM audit ${W} ORDER BY id DESC LIMIT ? OFFSET ?`, ...a, pg.size, pg.offset);
+const users = all<any>('SELECT DISTINCT user FROM audit');
+---
+<AdminLayout title="Журнал действий">
+  <form class="mb-4 flex gap-3"><select name="u" class="field !w-56 !py-2"><option value="">Все пользователи</option>{users.map((x) => <option selected={who === x.user}>{x.user}</option>)}</select><button class="btn btn-ghost !py-2">Показать</button></form>
+  <div class="overflow-x-auto rounded-2xl border border-line bg-white"><table class="w-full min-w-[700px] text-sm"><thead class="bg-cream/60 text-left text-xs uppercase tracking-wider text-ink-soft"><tr><th class="p-3">Время</th><th class="p-3">Кто</th><th class="p-3">Действие</th><th class="p-3">Объект</th><th class="p-3">Подробности</th></tr></thead>
+    <tbody class="divide-y divide-line">{rows.map((r) => <tr><td class="p-3 whitespace-nowrap text-xs text-ink-soft">{fmtDate(r.ts)}</td><td class="p-3 font-semibold">{r.user}</td><td class="p-3">{r.action}</td><td class="p-3 text-xs">{r.entity} {r.entity_id}</td><td class="max-w-xs truncate p-3 text-xs text-ink-soft" title={r.details}>{r.details}</td></tr>)}</tbody></table></div>
+  {pg.pages > 1 && <nav class="mt-4 flex flex-wrap gap-2">{Array.from({ length: pg.pages }, (_, i) => <a href={`?page=${i + 1}${who ? `&u=${who}` : ''}`} class="rounded-lg border border-line bg-white px-3 py-1.5 text-sm">{i + 1}</a>)}</nav>}
+</AdminLayout>

@@ -1,0 +1,49 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { all, run, audit, now } from '../../../lib/db';
+import { str, back, fmtDate } from '../../../lib/admin';
+
+const u = Astro.locals.user!;
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  const act = str(fd, 'action'), slug = str(fd, 'slug').toLowerCase().replace(/[^a-z0-9-]/g, '');
+  if (act === 'add') {
+    const name = str(fd, 'name');
+    if (!slug || !name) return Astro.redirect(back('/admin/formats/', 'err', 'Укажите адрес (латиницей) и название'));
+    if (['admin', 'api', 'menu', 'about', 'u', 'media', 'zayavka', 'fotootchety'].includes(slug)) return Astro.redirect(back('/admin/formats/', 'err', 'Этот адрес занят системой'));
+    const d = { name, h1: name, title: `${name} в Барнауле | Студия Вкуса`, description: '', intro: '', include_title: 'Что входит', include: [], price_title: 'Цены', price: '', steps_title: 'Как заказать', steps: [], faq: [] };
+    try { run('INSERT INTO formats (slug,sort,active,data,updated_at) VALUES (?,?,0,?,?)', slug, 900, JSON.stringify(d), now()); } catch { return Astro.redirect(back('/admin/formats/', 'err', 'Такой адрес уже существует')); }
+    audit(u.login, 'create', 'format', slug);
+    return Astro.redirect(back(`/admin/formats/${slug}/`, 'ok', 'Страница создана (пока скрыта — заполните и включите)'));
+  }
+  if (act === 'toggle') { run('UPDATE formats SET active=1-active, updated_at=? WHERE slug=?', now(), slug); audit(u.login, 'toggle', 'format', slug); }
+  return Astro.redirect(back('/admin/formats/', 'ok', 'Сохранено'));
+}
+const rows = all<any>('SELECT * FROM formats ORDER BY sort, slug').map((r) => ({ ...r, d: JSON.parse(r.data) }));
+---
+<AdminLayout title="Страницы форматов">
+  <p class="mb-5 max-w-3xl text-sm text-ink-soft">Посадочные страницы под поисковые запросы («фуршет», «банкет» и т.д.). Здесь меняются заголовки, описание для поисковиков, тексты, цены, вопросы и ответы.</p>
+  <div class="overflow-x-auto rounded-2xl border border-line bg-white">
+    <table class="w-full min-w-[720px] text-sm">
+      <thead class="bg-cream/60 text-left text-xs uppercase tracking-wider text-ink-soft"><tr><th class="p-3">Страница</th><th class="p-3">Адрес</th><th class="p-3">Title</th><th class="p-3">Показ</th><th class="p-3">Изменена</th><th class="p-3"></th></tr></thead>
+      <tbody class="divide-y divide-line">
+        {rows.map((r) => (
+          <tr class="hover:bg-cream/50">
+            <td class="p-3 font-semibold"><a href={`/admin/formats/${r.slug}/`} class="hover:text-brand">{r.d.name}</a></td>
+            <td class="p-3 font-mono text-xs"><a href={`/${r.slug}/`} target="_blank" class="text-ink-soft hover:text-brand">/{r.slug}/ ↗</a></td>
+            <td class="p-3 text-xs"><span class:list={[r.d.title.length > 70 && 'text-amber-700']}>{r.d.title.length} зн.</span> · <span class:list={[(r.d.description || '').length > 160 || !r.d.description ? 'text-amber-700' : '']}>desc {(r.d.description || '').length}</span></td>
+            <td class="p-3"><form method="post"><input type="hidden" name="action" value="toggle" /><input type="hidden" name="slug" value={r.slug} /><button class:list={['rounded-full px-3 py-1 text-xs font-bold', r.active ? 'bg-emerald-100 text-emerald-900' : 'bg-stone-200 text-stone-700']}>{r.active ? 'Включена' : 'Скрыта'}</button></form></td>
+            <td class="p-3 text-xs text-ink-soft">{fmtDate(r.updated_at)}</td>
+            <td class="p-3 text-right"><a href={`/admin/formats/${r.slug}/`} class="btn btn-ghost !px-4 !py-1.5">Редактировать</a></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  <form method="post" class="mt-6 flex max-w-3xl flex-wrap items-end gap-3 rounded-2xl border border-line bg-white p-5">
+    <input type="hidden" name="action" value="add" />
+    <label class="grid gap-1 text-xs font-semibold text-ink-soft">Название<input name="name" required class="field !py-2 w-60" placeholder="Детский праздник" /></label>
+    <label class="grid gap-1 text-xs font-semibold text-ink-soft">Адрес (латиницей)<input name="slug" required pattern="[a-z0-9\-]+" class="field !py-2 w-52 font-mono text-xs" placeholder="detskiy-prazdnik" /></label>
+    <button class="btn btn-primary !py-2">+ Новая страница</button>
+  </form>
+</AdminLayout>

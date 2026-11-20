@@ -1,0 +1,119 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { all, one, run, tx, audit, now } from '../../../lib/db';
+import { csvResponse, parseCsv, pager, back, str, num } from '../../../lib/admin';
+import { pic } from '../../../lib/media';
+
+const u = Astro.locals.user!;
+const q = Astro.url.searchParams;
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  const act = str(fd, 'action'), ret = str(fd, 'return') || '/admin/menu/';
+  if (act === 'import') {
+    const f = fd.get('file') as File;
+    if (!f || !f.size) return Astro.redirect(back(ret, 'err', 'Выберите CSV-файл'));
+    const rows = parseCsv(await f.text()); const head = rows.shift()!.map((h) => h.trim().toLowerCase());
+    const col = (n: string) => head.indexOf(n);
+    let upd = 0, add = 0, bad = 0;
+    tx(() => { for (const r of rows) {
+      const id = Number(r[col('id')]), price = parseFloat((r[col('цена')] || '').replace(/\s/g, '').replace(',', '.'));
+      const name = r[col('название')]?.trim();
+      if (id && one('SELECT 1 FROM items WHERE id=?', id)) {
+        run('UPDATE items SET price=COALESCE(?,price), name=COALESCE(NULLIF(?,\'\'),name), preview=COALESCE(?,preview), price_text=COALESCE(?,price_text), active=COALESCE(?,active), updated_at=? WHERE id=?',
+          Number.isFinite(price) ? price : null, name || '', col('вес/описание') >= 0 ? r[col('вес/описание')] : null, col('единица') >= 0 ? r[col('единица')] : null, col('активно') >= 0 ? (/^(1|да|y)/i.test(r[col('активно')]) ? 1 : 0) : null, now(), id); upd++;
+      } else if (!id && name) { run('INSERT INTO items (name,price,section,preview,price_text,active,updated_at) VALUES (?,?,?,?,?,1,?)', name, Number.isFinite(price) ? price : null, Number(r[col('раздел id')]) || null, r[col('вес/описание')] || '', r[col('единица')] || '', now()); add++; } else bad++;
+    } });
+    audit(u.login, 'import', 'item', undefined, { upd, add, bad });
+    return Astro.redirect(back(ret, 'ok', `Импорт: обновлено ${upd}, добавлено ${add}, пропущено ${bad}`));
+  }
+  const ids = fd.getAll('ids').map(Number).filter(Boolean);
+  if (!ids.length) return Astro.redirect(back(ret, 'err', 'Отметьте блюда'));
+  const ph = ids.map(() => '?').join(',');
+  if (act === 'on' || act === 'off') run(`UPDATE items SET active=?, updated_at=? WHERE id IN (${ph})`, act === 'on' ? 1 : 0, now(), ...ids);
+  else if (act === 'pop' || act === 'unpop') run(`UPDATE items SET popular=?, updated_at=? WHERE id IN (${ph})`, act === 'pop' ? 1 : 0, now(), ...ids);
+  else if (act === 'move') run(`UPDATE items SET section=?, updated_at=? WHERE id IN (${ph})`, Number(str(fd, 'section')) || null, now(), ...ids);
+  else if (act === 'pct') { const p = parseFloat(str(fd, 'value').replace(',', '.')); if (!Number.isFinite(p)) return Astro.redirect(back(ret, 'err', 'Укажите процент')); run(`UPDATE items SET price=ROUND(price*(1+?/100.0)), updated_at=? WHERE price IS NOT NULL AND id IN (${ph})`, p, now(), ...ids); }
+  else if (act === 'delete') { if (u.role === 'editor' || u.role === 'admin') run(`DELETE FROM items WHERE id IN (${ph})`, ...ids); }
+  audit(u.login, 'bulk_' + act, 'item', ids.slice(0, 30).join(','), { count: ids.length, value: str(fd, 'value') });
+  return Astro.redirect(back(ret, 'ok', `Готово: ${ids.length} поз.`));
+}
+const sections = all<any>('SELECT id,name,parent FROM sections ORDER BY parent IS NOT NULL, sort, name');
+const secName = (id: number) => { const s = sections.find((x) => x.id === id); if (!s) return '—'; const p = sections.find((x) => x.id === s.parent); return p ? `${p.name} → ${s.name}` : s.name; };
+const sec = q.get('sec') || '', s = (q.get('q') || '').trim(), st = q.get('st') || '', noimg = q.get('noimg') === '1', noprice = q.get('noprice') === '1';
+const where: string[] = [], args: any[] = [];
+if (sec) { where.push('(section=? OR section IN (SELECT id FROM sections WHERE parent=?))'); args.push(Number(sec), Number(sec)); }
+if (s) { where.push('name LIKE ?'); args.push(`%${s}%`); }
+if (st === 'off') where.push('active=0'); if (st === 'on') where.push('active=1'); if (st === 'pop') where.push('popular=1');
+if (noimg) where.push("(image IS NULL OR image='')"); if (noprice) where.push('(price IS NULL OR price=0)');
+const W = where.length ? 'WHERE ' + where.join(' AND ') : '';
+if (q.get('export') === 'csv') {
+  const rows = all<any>(`SELECT * FROM items ${W} ORDER BY section, sort, id`, ...args);
+  return csvResponse('menu.csv', [['ID', 'Название', 'Раздел ID', 'Раздел', 'Цена', 'Вес/описание', 'Единица', 'Активно'], ...rows.map((i) => [i.id, i.name, i.section, secName(i.section), i.price, i.preview, i.price_text, i.active ? 'да' : 'нет'])]);
+}
+const stats = one<any>('SELECT COUNT(*) n, SUM(active=0) off, SUM(image IS NULL OR image=\'\') noimg, SUM(price IS NULL OR price=0) noprice, SUM(popular=1) pop FROM items')!;
+const total = one<any>(`SELECT COUNT(*) n FROM items ${W}`, ...args)!.n;
+const pg = pager(total, Number(q.get('page') || 1), 40);
+const items = all<any>(`SELECT * FROM items ${W} ORDER BY section, sort, id LIMIT ? OFFSET ?`, ...args, pg.size, pg.offset);
+const keep = (o: Record<string, string>) => { const p = new URLSearchParams(Astro.url.search); p.delete('page'); for (const [k, v] of Object.entries(o)) v ? p.set(k, v) : p.delete(k); return '?' + p.toString(); };
+---
+<AdminLayout title="Меню и цены">
+  <div class="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    {[['Всего блюд', stats.n, ''], ['Скрыто на сайте', stats.off, 'st=off'], ['Без фото', stats.noimg, 'noimg=1'], ['Без цены', stats.noprice, 'noprice=1'], ['На главной (избранные)', stats.pop, 'st=pop']].map(([t, v, h]) => (
+      <a href={h ? `?${h}` : '?'} class="rounded-2xl border border-line bg-white p-4 hover:border-brand"><p class="text-xs font-semibold uppercase tracking-wider text-ink-soft">{t}</p><p class="mt-1 font-display text-3xl font-semibold">{v || 0}</p></a>
+    ))}
+  </div>
+  <div class="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-white p-4">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <label class="grid gap-1 text-xs font-semibold text-ink-soft">Поиск<input name="q" value={s} class="field !py-2 w-56" placeholder="Название блюда" /></label>
+      <label class="grid gap-1 text-xs font-semibold text-ink-soft">Раздел<select name="sec" class="field !py-2"><option value="">Все</option>{sections.filter((x) => !x.parent).map((p) => <><option value={p.id} selected={sec === String(p.id)}>{p.name}</option>{sections.filter((c) => c.parent === p.id).map((c) => <option value={c.id} selected={sec === String(c.id)}>— {c.name}</option>)}</>)}</select></label>
+      <label class="grid gap-1 text-xs font-semibold text-ink-soft">Показ<select name="st" class="field !py-2"><option value="">Все</option><option value="on" selected={st === 'on'}>Активные</option><option value="off" selected={st === 'off'}>Скрытые</option><option value="pop" selected={st === 'pop'}>Избранные</option></select></label>
+      <button class="btn btn-ghost !py-2">Найти</button>
+    </form>
+    <div class="ml-auto flex flex-wrap gap-2">
+      <a href="/admin/menu/sections/" class="btn btn-ghost !py-2">Разделы</a>
+      <a href={keep({ export: 'csv' })} class="btn btn-ghost !py-2">Экспорт CSV</a>
+      <a href="/admin/menu/new/" class="btn btn-primary !py-2">+ Добавить блюдо</a>
+    </div>
+  </div>
+
+  <form method="post" class="rounded-2xl border border-line bg-white">
+    <input type="hidden" name="return" value={Astro.url.pathname + Astro.url.search} />
+    <div class="flex flex-wrap items-center gap-2 border-b border-line p-3 text-sm">
+      <span class="text-ink-soft">С отмеченными:</span>
+      <button name="action" value="on" class="btn btn-ghost !px-3 !py-1.5">Показать</button>
+      <button name="action" value="off" class="btn btn-ghost !px-3 !py-1.5">Скрыть</button>
+      <button name="action" value="pop" class="btn btn-ghost !px-3 !py-1.5">★ На главную</button>
+      <button name="action" value="unpop" class="btn btn-ghost !px-3 !py-1.5">Убрать с главной</button>
+      <span class="mx-1 h-5 w-px bg-line"></span>
+      <input name="value" class="field !w-24 !py-1.5" placeholder="±%" aria-label="Изменить цену на процент" />
+      <button name="action" value="pct" class="btn btn-ghost !px-3 !py-1.5" data-confirm="Изменить цены у отмеченных блюд?">Цена ±%</button>
+      <select name="section" class="field !w-48 !py-1.5"><option value="">Переместить в…</option>{sections.map((x) => <option value={x.id}>{x.parent ? '— ' : ''}{x.name}</option>)}</select>
+      <button name="action" value="move" class="btn btn-ghost !px-3 !py-1.5">Перенести</button>
+      <button name="action" value="delete" class="btn !px-3 !py-1.5 text-brand hover:bg-brand-soft" data-confirm="Удалить отмеченные блюда безвозвратно? Лучше «Скрыть».">Удалить</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[820px] text-sm">
+        <thead class="bg-cream/60 text-left text-xs uppercase tracking-wider text-ink-soft"><tr><th class="w-10 p-3"><input type="checkbox" onclick="document.querySelectorAll('[name=ids]').forEach(c=>c.checked=this.checked)" aria-label="Выбрать все" /></th><th class="w-16 p-3"></th><th class="p-3">Название</th><th class="p-3">Раздел</th><th class="p-3 text-right">Цена</th><th class="p-3">Статус</th></tr></thead>
+        <tbody class="divide-y divide-line">
+          {items.map((i) => { const p = pic(i.image); return (
+            <tr class:list={['hover:bg-cream/50', !i.active && 'opacity-55']}>
+              <td class="p-3"><input type="checkbox" name="ids" value={i.id} /></td>
+              <td class="p-2">{p ? <img src={p.thumb} alt="" class="h-12 w-12 rounded-lg object-cover" loading="lazy" /> : <span class="grid h-12 w-12 place-items-center rounded-lg bg-cream-deep text-[10px] text-ink-soft">нет фото</span>}</td>
+              <td class="p-3"><a href={`/admin/menu/${i.id}/`} class="font-semibold hover:text-brand">{i.name}</a><p class="text-xs text-ink-soft">{i.preview} {i.price_text && `· ${i.price_text}`}</p></td>
+              <td class="p-3 text-xs text-ink-soft">{secName(i.section)}</td>
+              <td class="p-3 text-right font-bold tabular-nums whitespace-nowrap">{i.price ? num(i.price) + ' ₽' : <span class="text-brand">—</span>}</td>
+              <td class="p-3 text-xs">{i.popular ? <span class="mr-1 text-amber-500" title="Показывается на главной">★</span> : ''}{i.active ? 'Показано' : <b>Скрыто</b>}</td>
+            </tr>); })}
+          {!items.length && <tr><td colspan="6" class="p-10 text-center text-ink-soft">Ничего не найдено</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </form>
+  {pg.pages > 1 && <nav class="mt-4 flex flex-wrap gap-2" aria-label="Страницы">{Array.from({ length: pg.pages }, (_, i) => <a href={keep({ page: String(i + 1) })} aria-current={pg.page === i + 1 ? 'page' : undefined} class="rounded-lg border border-line bg-white px-3 py-1.5 text-sm aria-[current=page]:bg-ink aria-[current=page]:text-white">{i + 1}</a>)}</nav>}
+
+  <form method="post" enctype="multipart/form-data" class="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-line p-4 text-sm">
+    <input type="hidden" name="action" value="import" /><input type="hidden" name="return" value="/admin/menu/" />
+    <b>Массовое обновление цен из CSV:</b><span class="text-ink-soft">выгрузите CSV, поправьте цены в Excel и загрузите обратно (по колонке ID; строки без ID добавляются как новые блюда).</span>
+    <input type="file" name="file" accept=".csv,text/csv" class="text-sm" /><button class="btn btn-ghost !py-2">Загрузить</button>
+  </form>
+</AdminLayout>

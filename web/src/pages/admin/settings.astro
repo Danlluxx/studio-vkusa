@@ -1,0 +1,92 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import fs from 'node:fs';
+import path from 'node:path';
+import { db, audit, DATA_DIR, all } from '../../lib/db';
+import { getSettings, setSettings } from '../../lib/settings';
+import { notify } from '../../lib/notify';
+import { str, back, fmtDate } from '../../lib/admin';
+const u = Astro.locals.user!;
+if (u.role !== 'admin') return new Response('Недостаточно прав', { status: 403 });
+
+if (Astro.url.searchParams.get('backup') === '1') {
+  const tmp = path.join(DATA_DIR, `backup-${Date.now()}.db`);
+  db.exec(`VACUUM INTO '${tmp.replace(/'/g, "''")}'`);
+  const buf = fs.readFileSync(tmp); fs.rmSync(tmp);
+  audit(u.login, 'backup', 'db');
+  return new Response(buf, { headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="studio-vkusa-${new Date().toISOString().slice(0, 10)}.db"` } });
+}
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData(), act = str(fd, 'action');
+  if (act === 'contacts') {
+    setSettings({ phone: str(fd, 'phone'), whatsapp: str(fd, 'whatsapp').replace(/\D/g, ''), telegram: str(fd, 'telegram').replace(/^@/, ''), email: str(fd, 'email'), address: str(fd, 'address'), hours: str(fd, 'hours'), hoursShort: str(fd, 'hoursShort'), vk: str(fd, 'vk'), minPrice: str(fd, 'minPrice'), metrika_id: str(fd, 'metrika_id').replace(/\D/g, ''), yandex_verification: str(fd, 'yandex_verification').replace(/[^\w-]/g, ''), google_verification: str(fd, 'google_verification').replace(/[^\w-]/g, '') });
+    audit(u.login, 'update', 'settings', 'contacts');
+    return Astro.redirect(back('/admin/settings/', 'ok', 'Контакты сохранены'));
+  }
+  const patch: Record<string, string> = { tg_chat: str(fd, 'tg_chat'), smtp_host: str(fd, 'smtp_host'), smtp_port: str(fd, 'smtp_port'), smtp_user: str(fd, 'smtp_user'), mail_to: str(fd, 'mail_to') };
+  if (str(fd, 'tg_token')) patch.tg_token = str(fd, 'tg_token');
+  if (str(fd, 'smtp_pass')) patch.smtp_pass = str(fd, 'smtp_pass');
+  setSettings(patch);
+  audit(u.login, 'update', 'settings', 'notify');
+  if (act === 'test') {
+    const r = await notify('Проверка уведомлений', [['Сообщение', 'Если вы это видите — заявки будут приходить сюда'], ['Отправил', u.name]]);
+    if (!r.configured) return Astro.redirect(back('/admin/settings/', 'err', 'Не настроен ни один канал: заполните Telegram или почту'));
+    const bad = r.results.filter((x) => !x.ok);
+    return Astro.redirect(bad.length ? back('/admin/settings/', 'err', bad.map((b) => `${b.channel}: ${b.error}`).join(' | ')) : back('/admin/settings/', 'ok', 'Тестовое уведомление отправлено: ' + r.results.map((x) => x.channel).join(', ')));
+  }
+  return Astro.redirect(back('/admin/settings/', 'ok', 'Настройки уведомлений сохранены'));
+}
+const s = getSettings();
+const stats = all<any>("SELECT (SELECT COUNT(*) FROM events) ev, (SELECT COUNT(*) FROM leads) ld, (SELECT COUNT(*) FROM items) it")[0];
+const dbSize = (() => { try { return fs.statSync(path.join(DATA_DIR, 'site.db')).size; } catch { return 0; } })();
+const Field = (p: any) => p;
+void Field; void fmtDate;
+---
+<AdminLayout title="Настройки">
+  <div class="grid max-w-6xl gap-5 xl:grid-cols-2">
+    <form method="post" class="space-y-4 rounded-2xl border border-line bg-white p-6">
+      <input type="hidden" name="action" value="contacts" />
+      <h2 class="font-sans text-[15px] font-bold">Контакты и сайт</h2>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="grid gap-1.5 text-sm font-semibold">Телефон<input name="phone" value={s.phone} class="field" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">WhatsApp (цифры)<input name="whatsapp" value={s.whatsapp} class="field" placeholder="79236448785" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Telegram (ник или номер) <span class="font-normal text-ink-soft">— пусто = тот же номер, что WhatsApp</span><input name="telegram" value={s.telegram} class="field" placeholder="пусто — по номеру WhatsApp" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">E-mail<input name="email" value={s.email} type="email" class="field" /></label>
+      </div>
+      <label class="grid gap-1.5 text-sm font-semibold">Адрес<input name="address" value={s.address} class="field" /></label>
+      <label class="grid gap-1.5 text-sm font-semibold">Часы работы (подвал)<input name="hours" value={s.hours} class="field" /></label>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="grid gap-1.5 text-sm font-semibold">Часы кратко (шапка)<input name="hoursShort" value={s.hoursShort} class="field" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Ссылка VK<input name="vk" value={s.vk} class="field" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Цена «от»<input name="minPrice" value={s.minPrice} class="field" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Яндекс Метрика (номер счётчика)<input name="metrika_id" value={s.metrika_id} class="field" placeholder="необязательно" /></label>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="grid gap-1.5 text-sm font-semibold">Яндекс Вебмастер: код подтверждения<input name="yandex_verification" value={s.yandex_verification} class="field font-mono text-xs" placeholder="значение content мета-тега" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Google Search Console: код<input name="google_verification" value={s.google_verification} class="field font-mono text-xs" placeholder="значение content мета-тега" /></label>
+      </div>
+      <button class="btn btn-primary">Сохранить</button>
+    </form>
+
+    <form method="post" class="space-y-4 rounded-2xl border border-line bg-white p-6">
+      <h2 class="font-sans text-[15px] font-bold">Уведомления о заявках</h2>
+      <p class="text-sm text-ink-soft">Новая заявка приходит в Telegram и на почту. Сама заявка в любом случае сохраняется в разделе «Заявки».</p>
+      <fieldset class="space-y-3 rounded-xl border border-line p-4"><legend class="px-2 text-sm font-bold">Telegram</legend>
+        <label class="grid gap-1.5 text-sm font-semibold">Токен бота <span class="font-normal text-ink-soft">{s.tg_token ? '(сохранён, оставьте пустым, чтобы не менять)' : '(создаётся у @BotFather)'}</span><input name="tg_token" type="password" autocomplete="off" class="field" placeholder={s.tg_token ? '••••••••••' : '123456:ABC...'} /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">ID чата или группы<input name="tg_chat" value={s.tg_chat} class="field" placeholder="-1001234567890" /></label>
+      </fieldset>
+      <fieldset class="space-y-3 rounded-xl border border-line p-4"><legend class="px-2 text-sm font-bold">Почта (SMTP)</legend>
+        <div class="grid gap-3 sm:grid-cols-[1fr_100px]"><label class="grid gap-1.5 text-sm font-semibold">Сервер<input name="smtp_host" value={s.smtp_host} class="field" placeholder="smtp.timeweb.ru" /></label><label class="grid gap-1.5 text-sm font-semibold">Порт<input name="smtp_port" value={s.smtp_port} class="field" /></label></div>
+        <div class="grid gap-3 sm:grid-cols-2"><label class="grid gap-1.5 text-sm font-semibold">Логин<input name="smtp_user" value={s.smtp_user} class="field" /></label><label class="grid gap-1.5 text-sm font-semibold">Пароль <span class="font-normal text-ink-soft">{s.smtp_pass ? '(сохранён)' : ''}</span><input name="smtp_pass" type="password" autocomplete="off" class="field" placeholder={s.smtp_pass ? '••••••••••' : ''} /></label></div>
+        <label class="grid gap-1.5 text-sm font-semibold">Куда присылать<input name="mail_to" value={s.mail_to} class="field" /></label>
+      </fieldset>
+      <div class="flex flex-wrap gap-3"><button name="action" value="notify" class="btn btn-primary">Сохранить</button><button name="action" value="test" class="btn btn-ghost">Сохранить и отправить тест</button></div>
+    </form>
+
+    <section class="space-y-3 rounded-2xl border border-line bg-white p-6 xl:col-span-2">
+      <h2 class="font-sans text-[15px] font-bold">Резервная копия и данные</h2>
+      <p class="text-sm text-ink-soft">В базе: {stats.it} блюд, {stats.ld} заявок, {stats.ev} событий аналитики. Размер файла — {(dbSize / 1048576).toFixed(1)} МБ. Фото лежат отдельно в папке <code>data/uploads</code>.</p>
+      <a href="?backup=1" class="btn btn-ghost">Скачать резервную копию базы</a>
+    </section>
+  </div>
+</AdminLayout>

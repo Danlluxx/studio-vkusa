@@ -1,0 +1,56 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { all, one, run, audit, now, hashPassword } from '../../../lib/db';
+import { ROLES, killUserSessions } from '../../../lib/auth';
+import { str, back, fmtDate } from '../../../lib/admin';
+const me = Astro.locals.user!;
+if (me.role !== 'admin') return new Response('Недостаточно прав', { status: 403 });
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData(), act = str(fd, 'action'), id = Number(str(fd, 'id'));
+  try {
+    if (act === 'add') {
+      const login = str(fd, 'login').toLowerCase(), pw = String(fd.get('password') || '');
+      if (!/^[a-z0-9._-]{3,32}$/.test(login)) throw new Error('Логин: 3–32 символа, латиница, цифры, . _ -');
+      if (pw.length < 10) throw new Error('Пароль — не короче 10 символов');
+      if (!(str(fd, 'role') in ROLES)) throw new Error('Неверная роль');
+      run('INSERT INTO users (login,name,role,password_hash,active,created_at) VALUES (?,?,?,?,1,?)', login, str(fd, 'name') || login, str(fd, 'role'), hashPassword(pw), now());
+      audit(me.login, 'create', 'user', login, { role: str(fd, 'role') });
+    }
+    if (act === 'save') {
+      if (id === me.id && (!str(fd, 'active') || str(fd, 'role') !== 'admin')) throw new Error('Нельзя отключить или понизить самого себя');
+      run('UPDATE users SET name=?, role=?, active=? WHERE id=?', str(fd, 'name'), str(fd, 'role'), str(fd, 'active') ? 1 : 0, id);
+      if (!str(fd, 'active')) killUserSessions(id);
+      const pw = String(fd.get('password') || ''); if (pw) { if (pw.length < 10) throw new Error('Пароль — не короче 10 символов'); run('UPDATE users SET password_hash=? WHERE id=?', hashPassword(pw), id); killUserSessions(id); }
+      audit(me.login, 'update', 'user', id, { role: str(fd, 'role'), pwReset: !!pw });
+    }
+  } catch (e: any) { return Astro.redirect(back('/admin/users/', 'err', /UNIQUE/.test(e.message) ? 'Такой логин уже есть' : e.message)); }
+  return Astro.redirect(back('/admin/users/', 'ok', 'Сохранено'));
+}
+const users = all<any>('SELECT * FROM users ORDER BY id');
+void one;
+---
+<AdminLayout title="Пользователи">
+  <div class="mb-5 grid max-w-5xl gap-3 text-sm sm:grid-cols-3">
+    <p class="rounded-xl border border-line bg-white p-4"><b>Администратор</b><br />Полный доступ, включая пользователей и настройки.</p>
+    <p class="rounded-xl border border-line bg-white p-4"><b>Менеджер</b><br />Заявки и аналитика. Меню и настройки не видит.</p>
+    <p class="rounded-xl border border-line bg-white p-4"><b>Редактор</b><br />Меню, тексты, отзывы, SEO. Без заявок и настроек.</p>
+  </div>
+  <div class="max-w-5xl space-y-3">
+    {users.map((x) => (
+      <form method="post" class:list={['grid items-end gap-3 rounded-2xl border border-line bg-white p-4 sm:grid-cols-[1fr_1fr_1.2fr_1fr_auto]', !x.active && 'opacity-60']}>
+        <input type="hidden" name="action" value="save" /><input type="hidden" name="id" value={x.id} />
+        <div><p class="text-xs text-ink-soft">Логин</p><p class="font-mono font-bold">{x.login}</p><p class="text-xs text-ink-soft">вход: {fmtDate(x.last_login)}</p></div>
+        <label class="grid gap-1 text-xs font-semibold text-ink-soft">Имя<input name="name" value={x.name} class="field !py-2" /></label>
+        <label class="grid gap-1 text-xs font-semibold text-ink-soft">Роль<select name="role" class="field !py-2">{Object.entries(ROLES).map(([k, v]) => <option value={k} selected={x.role === k}>{v}</option>)}</select></label>
+        <label class="grid gap-1 text-xs font-semibold text-ink-soft">Новый пароль<input name="password" type="password" autocomplete="new-password" placeholder="не менять" class="field !py-2" /></label>
+        <div class="flex items-center gap-3"><label class="flex items-center gap-1.5 text-sm"><input type="checkbox" name="active" checked={!!x.active} class="accent-[#d01414]" />Активен</label><button class="btn btn-ghost !px-4 !py-1.5">Сохранить</button></div>
+      </form>
+    ))}
+    <form method="post" class="grid items-end gap-3 rounded-2xl border border-dashed border-line p-4 sm:grid-cols-[1fr_1fr_1.2fr_1fr_auto]"><input type="hidden" name="action" value="add" />
+      <label class="grid gap-1 text-xs font-semibold text-ink-soft">Логин<input name="login" required class="field !py-2" /></label>
+      <label class="grid gap-1 text-xs font-semibold text-ink-soft">Имя<input name="name" class="field !py-2" /></label>
+      <label class="grid gap-1 text-xs font-semibold text-ink-soft">Роль<select name="role" class="field !py-2">{Object.entries(ROLES).map(([k, v]) => <option value={k}>{v}</option>)}</select></label>
+      <label class="grid gap-1 text-xs font-semibold text-ink-soft">Пароль (от 10 зн.)<input name="password" type="password" autocomplete="new-password" required class="field !py-2" /></label>
+      <button class="btn btn-primary !py-2">+ Добавить</button></form>
+  </div>
+</AdminLayout>

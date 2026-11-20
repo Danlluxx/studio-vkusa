@@ -1,0 +1,28 @@
+# Пример для nginx перед Node-приложением (npm start, порт 4321).
+# Что делает: один главный домен + https, сжатие, долгий кэш статики, проксирование.
+server { listen 80; server_name studio-vkusa.ru www.studio-vkusa.ru; return 301 https://www.studio-vkusa.ru$request_uri; }
+server { listen 443 ssl http2; server_name studio-vkusa.ru; ssl_certificate /etc/letsencrypt/live/studio-vkusa.ru/fullchain.pem; ssl_certificate_key /etc/letsencrypt/live/studio-vkusa.ru/privkey.pem; return 301 https://www.studio-vkusa.ru$request_uri; }
+
+server {
+  listen 443 ssl http2;
+  server_name www.studio-vkusa.ru;
+  ssl_certificate     /etc/letsencrypt/live/studio-vkusa.ru/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/studio-vkusa.ru/privkey.pem;
+
+  gzip on; gzip_comp_level 5; gzip_vary on; gzip_min_length 512;
+  gzip_types text/css application/javascript application/json application/xml image/svg+xml text/plain;
+  # brotli on; brotli_types ...;   # если модуль установлен
+
+  # хэшированные файлы сборки и фото — кэш на год
+  location ~* ^/(_astro|media|u)/ { proxy_pass http://127.0.0.1:4321; proxy_set_header Host $host; expires 1y; add_header Cache-Control "public, max-age=31536000, immutable"; }
+  location ~* \.(png|jpg|jpeg|webp|avif|ico|woff2)$ { proxy_pass http://127.0.0.1:4321; proxy_set_header Host $host; expires 30d; add_header Cache-Control "public, max-age=2592000"; }
+  location = /app.js { proxy_pass http://127.0.0.1:4321; proxy_set_header Host $host; expires 7d; }
+
+  location / {
+    proxy_pass http://127.0.0.1:4321;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    client_max_body_size 30m;   # загрузка фото в админке
+  }
+}

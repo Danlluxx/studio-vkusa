@@ -1,0 +1,83 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { all, one, run, audit, now } from '../../../lib/db';
+import { STATUSES, fmtDate, ago, csvResponse, pager, back, str } from '../../../lib/admin';
+import { range } from '../../../lib/analytics';
+
+const u = Astro.locals.user!;
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  const ids = fd.getAll('ids').map(Number).filter(Boolean), st = str(fd, 'status');
+  if (ids.length && STATUSES[st]) {
+    for (const id of ids) run('UPDATE leads SET status=?, updated_at=? WHERE id=?', st, now(), id);
+    audit(u.login, 'bulk_status', 'lead', ids.join(','), { status: st });
+    return Astro.redirect(back(str(fd, 'return') || '/admin/leads/', 'ok', `Статус изменён у заявок: ${ids.length}`));
+  }
+  return Astro.redirect(back('/admin/leads/', 'err', 'Выберите заявки и статус'));
+}
+const q = Astro.url.searchParams, status = q.get('s') || '', s = (q.get('q') || '').trim(), src = q.get('src') || '', per = q.get('p') || 'all';
+const where: string[] = [], args: any[] = [];
+if (STATUSES[status]) { where.push('status=?'); args.push(status); }
+if (s) { where.push('(name LIKE ? OR phone LIKE ? OR comment LIKE ?)'); args.push(`%${s}%`, `%${s}%`, `%${s}%`); }
+if (src) { where.push('source=?'); args.push(src); }
+if (per !== 'all') { const r = range(per); where.push('ts>=?'); args.push(r.from); }
+const W = where.length ? 'WHERE ' + where.join(' AND ') : '';
+if (q.get('export') === 'csv') {
+  const rows = all<any>(`SELECT * FROM leads ${W} ORDER BY ts DESC`, ...args);
+  return csvResponse('zayavki.csv', [['№', 'Дата', 'Имя', 'Телефон', 'Дата события', 'Гостей', 'Пожелания', 'Блюда', 'Страница', 'Источник', 'Канал', 'Кампания', 'Устройство', 'Статус', 'Сумма', 'Комментарий менеджера'],
+    ...rows.map((l) => [l.id, fmtDate(l.ts), l.name, l.phone, l.date, l.guests, l.comment, JSON.parse(l.items || '[]').map((i: any) => `${i.name} × ${i.qty}`).join('; '), l.page, l.source, l.medium, l.campaign, l.device, STATUSES[l.status]?.name, l.amount, l.manager_comment])]);
+}
+const counts = Object.fromEntries(all<any>('SELECT status, COUNT(*) n FROM leads GROUP BY status').map((r) => [r.status, r.n]));
+const total = one<any>(`SELECT COUNT(*) n FROM leads ${W}`, ...args)!.n;
+const pg = pager(total, Number(q.get('page') || 1), 25);
+const leads = all<any>(`SELECT * FROM leads ${W} ORDER BY (status='new') DESC, ts DESC LIMIT ? OFFSET ?`, ...args, pg.size, pg.offset);
+const sources = all<any>('SELECT DISTINCT source FROM leads WHERE source<>\'\' ORDER BY source');
+const keep = (o: Record<string, string>) => { const p = new URLSearchParams(Astro.url.search); p.delete('page'); for (const [k, v] of Object.entries(o)) v ? p.set(k, v) : p.delete(k); return '?' + p.toString(); };
+---
+<AdminLayout title="Заявки">
+  <div class="mb-5 flex flex-wrap gap-2">
+    <a href={keep({ s: '' })} class:list={['rounded-full border px-4 py-1.5 text-sm font-semibold', !status ? 'border-ink bg-ink text-white' : 'border-line bg-white']}>Все <span class="opacity-60">{total}</span></a>
+    {Object.entries(STATUSES).map(([k, v]) => <a href={keep({ s: k })} class:list={['rounded-full border px-4 py-1.5 text-sm font-semibold', status === k ? 'border-ink bg-ink text-white' : 'border-line bg-white']}>{v.name} <span class="opacity-60">{counts[k] || 0}</span></a>)}
+  </div>
+  <form method="get" class="mb-5 flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-white p-4">
+    {status && <input type="hidden" name="s" value={status} />}
+    <label class="grid gap-1 text-xs font-semibold text-ink-soft">Поиск<input name="q" value={s} placeholder="Имя, телефон, пожелание" class="field !py-2 w-64" /></label>
+    <label class="grid gap-1 text-xs font-semibold text-ink-soft">Период<select name="p" class="field !py-2">{[['all', 'Всё время'], ['today', 'Сегодня'], ['7', '7 дней'], ['30', '30 дней'], ['90', '90 дней']].map(([k, l]) => <option value={k} selected={per === k}>{l}</option>)}</select></label>
+    <label class="grid gap-1 text-xs font-semibold text-ink-soft">Источник<select name="src" class="field !py-2"><option value="">Все</option>{sources.map((x) => <option selected={src === x.source}>{x.source}</option>)}</select></label>
+    <button class="btn btn-ghost !py-2">Применить</button>
+    <a href={keep({ export: 'csv' })} class="btn btn-ghost !py-2 ml-auto">Экспорт в CSV</a>
+  </form>
+
+  <form method="post" class="rounded-2xl border border-line bg-white">
+    <input type="hidden" name="return" value={Astro.url.pathname + Astro.url.search} />
+    <div class="flex flex-wrap items-center gap-3 border-b border-line p-3 text-sm">
+      <span class="text-ink-soft">Выбранным:</span>
+      <select name="status" class="field !w-auto !py-1.5">{Object.entries(STATUSES).map(([k, v]) => <option value={k}>{v.name}</option>)}</select>
+      <button class="btn btn-ghost !px-4 !py-1.5">Сменить статус</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[860px] text-sm">
+        <thead class="bg-cream/60 text-left text-xs uppercase tracking-wider text-ink-soft"><tr><th class="w-10 p-3"><input type="checkbox" onclick="document.querySelectorAll('[name=ids]').forEach(c=>c.checked=this.checked)" aria-label="Выбрать все" /></th><th class="p-3">№</th><th class="p-3">Клиент</th><th class="p-3">Событие</th><th class="p-3">Блюда</th><th class="p-3">Источник</th><th class="p-3">Статус</th><th class="p-3 text-right">Когда</th></tr></thead>
+        <tbody class="divide-y divide-line">
+          {leads.map((l) => {
+            const items = JSON.parse(l.items || '[]');
+            return (
+              <tr class:list={['hover:bg-cream/50', l.status === 'new' && 'bg-brand-soft/40']}>
+                <td class="p-3"><input type="checkbox" name="ids" value={l.id} /></td>
+                <td class="p-3 tabular-nums text-ink-soft">{l.id}</td>
+                <td class="p-3"><a href={`/admin/leads/${l.id}/`} class="font-bold hover:text-brand">{l.name}</a><br /><a href={`tel:${l.phone}`} class="text-ink-soft">{l.phone}</a></td>
+                <td class="p-3">{l.date || '—'}{l.guests ? <span class="text-ink-soft"> · {l.guests} гост.</span> : ''}{l.comment && <p class="max-w-xs truncate text-xs text-ink-soft">{l.comment}</p>}</td>
+                <td class="p-3 text-xs">{items.length ? `${items.length} поз.` : '—'}</td>
+                <td class="p-3 text-xs">{l.source}<br /><span class="text-ink-soft">{l.page}</span></td>
+                <td class="p-3"><span class:list={['rounded-full px-2.5 py-1 text-xs font-bold', STATUSES[l.status]?.cls]}>{STATUSES[l.status]?.name}</span></td>
+                <td class="p-3 text-right text-xs text-ink-soft" title={fmtDate(l.ts)}>{ago(l.ts)}</td>
+              </tr>
+            );
+          })}
+          {!leads.length && <tr><td colspan="8" class="p-10 text-center text-ink-soft">Заявок пока нет. Как только клиент отправит форму на сайте, она появится здесь.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </form>
+  {pg.pages > 1 && <nav class="mt-4 flex flex-wrap gap-2" aria-label="Страницы">{Array.from({ length: pg.pages }, (_, i) => <a href={keep({ page: String(i + 1) })} aria-current={pg.page === i + 1 ? 'page' : undefined} class="rounded-lg border border-line bg-white px-3 py-1.5 text-sm aria-[current=page]:bg-ink aria-[current=page]:text-white">{i + 1}</a>)}</nav>}
+</AdminLayout>

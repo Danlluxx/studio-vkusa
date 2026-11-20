@@ -1,0 +1,70 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { one, run, audit, now } from '../../../lib/db';
+import { str, back, lines, fmtDate } from '../../../lib/admin';
+
+const u = Astro.locals.user!;
+const slug = Astro.params.slug!;
+const row = one<any>('SELECT * FROM formats WHERE slug=?', slug);
+if (!row) return new Response(null, { status: 404 });
+const d = JSON.parse(row.data);
+const self = `/admin/formats/${slug}/`;
+
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  if (str(fd, 'delete') === '1') { run('DELETE FROM formats WHERE slug=?', slug); audit(u.login, 'delete', 'format', slug); return Astro.redirect(back('/admin/formats/', 'ok', 'Страница удалена')); }
+  const faqText = String(fd.get('faq') || '').replace(/\r/g, '');
+  const faq = faqText.split(/\n\s*\n/).map((b) => b.trim().split('\n')).filter((p) => p.length >= 2).map((p) => [p[0].trim(), p.slice(1).join(' ').trim()]);
+  const nd = { ...d, name: str(fd, 'name'), note: str(fd, 'note'), h1: str(fd, 'h1'), title: str(fd, 'title'), description: str(fd, 'description'), intro: str(fd, 'intro'),
+    include_title: str(fd, 'include_title'), include: lines(String(fd.get('include') || '')), price_title: str(fd, 'price_title'), price: str(fd, 'price'),
+    steps_title: str(fd, 'steps_title'), steps: lines(String(fd.get('steps') || '')), faq };
+  run('UPDATE formats SET data=?, active=?, sort=?, updated_at=? WHERE slug=?', JSON.stringify(nd), str(fd, 'active') ? 1 : 0, Number(str(fd, 'sort')) || 500, now(), slug);
+  audit(u.login, 'update', 'format', slug);
+  return Astro.redirect(back(self, 'ok', 'Сохранено. Изменения уже на сайте.'));
+}
+const faqText = (d.faq || []).map((q: string[]) => `${q[0]}\n${q[1]}`).join('\n\n');
+const counter = (id: string, max: number) => `oninput="document.getElementById('${id}').textContent=this.value.length;document.getElementById('${id}').parentElement.classList.toggle('text-brand',this.value.length>${max})"`;
+void counter;
+---
+<AdminLayout title={`Страница: ${d.name}`}>
+  <a href="/admin/formats/" class="mb-4 inline-block text-sm font-semibold text-brand">← Все форматы</a>
+  <form method="post" class="grid max-w-6xl gap-5 xl:grid-cols-[1.6fr_1fr]">
+    <div class="space-y-5">
+      <section class="space-y-4 rounded-2xl border border-line bg-white p-6">
+        <h2 class="font-sans text-[15px] font-bold">Основное</h2>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="grid gap-1.5 text-sm font-semibold">Название (меню, ссылки)<input name="name" value={d.name} required class="field" /></label>
+          <label class="grid gap-1.5 text-sm font-semibold">Подпись на карточке главной<input name="note" value={d.note || ''} class="field" /></label>
+        </div>
+        <label class="grid gap-1.5 text-sm font-semibold">Заголовок H1<input name="h1" value={d.h1} class="field" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Вступление<textarea name="intro" rows="4" class="field">{d.intro}</textarea></label>
+      </section>
+      <section class="space-y-4 rounded-2xl border border-line bg-white p-6">
+        <h2 class="font-sans text-[15px] font-bold">Содержание страницы</h2>
+        <label class="grid gap-1.5 text-sm font-semibold">Заголовок блока «Что входит»<input name="include_title" value={d.include_title} class="field" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Что входит <span class="font-normal text-ink-soft">— по одному пункту в строке</span><textarea name="include" rows="7" class="field">{(d.include || []).join('\n')}</textarea></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Заголовок блока цен<input name="price_title" value={d.price_title} class="field" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Текст про цены<textarea name="price" rows="4" class="field">{d.price}</textarea></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Заголовок блока «Как заказать»<input name="steps_title" value={d.steps_title} class="field" /></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Шаги <span class="font-normal text-ink-soft">— по одному в строке</span><textarea name="steps" rows="5" class="field">{(d.steps || []).join('\n')}</textarea></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Вопросы и ответы <span class="font-normal text-ink-soft">— вопрос на первой строке, ответ ниже, между вопросами пустая строка</span><textarea name="faq" rows="12" class="field">{faqText}</textarea></label>
+      </section>
+    </div>
+    <aside class="space-y-5">
+      <section class="space-y-4 rounded-2xl border border-line bg-white p-6">
+        <h2 class="font-sans text-[15px] font-bold">Для поисковиков</h2>
+        <label class="grid gap-1.5 text-sm font-semibold">Title <span class="font-normal text-ink-soft">(до ~65 зн.: <b id="tl">{d.title.length}</b>)</span><textarea name="title" rows="3" class="field" oninput="tl.textContent=this.value.length">{d.title}</textarea></label>
+        <label class="grid gap-1.5 text-sm font-semibold">Description <span class="font-normal text-ink-soft">(до 160 зн.: <b id="dl">{(d.description || '').length}</b>)</span><textarea name="description" rows="4" class="field" oninput="dl.textContent=this.value.length">{d.description}</textarea></label>
+        <div class="rounded-xl bg-cream p-3 text-sm"><p class="text-xs text-ink-soft">Так страница может выглядеть в поиске:</p><p class="mt-1 font-semibold text-[#1a0dab]">{d.title}</p><p class="text-xs text-emerald-700">studio-vkusa.ru/{slug}/</p><p class="text-xs text-ink-soft">{d.description}</p></div>
+      </section>
+      <section class="space-y-4 rounded-2xl border border-line bg-white p-6">
+        <label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="active" checked={!!row.active} class="h-4 w-4 accent-[#d01414]" />Страница включена</label>
+        <label class="grid gap-1.5 text-sm font-semibold">Порядок в меню<input name="sort" type="number" value={row.sort} class="field" /></label>
+        <button class="btn btn-primary w-full">Сохранить</button>
+        <a href={`/${slug}/`} target="_blank" class="block text-center text-sm text-ink-soft underline">Посмотреть на сайте ↗</a>
+        <p class="text-xs text-ink-soft">Изменено: {fmtDate(row.updated_at)}</p>
+        <button name="delete" value="1" data-confirm="Удалить страницу безвозвратно?" class="text-sm text-ink-soft underline hover:text-brand">Удалить страницу</button>
+      </section>
+    </aside>
+  </form>
+</AdminLayout>

@@ -1,0 +1,31 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { one, run, audit, now } from '../../../lib/db';
+import { str, back, fmtDate } from '../../../lib/admin';
+const u = Astro.locals.user!;
+const slug = Astro.params.slug!;
+const p = one<any>('SELECT * FROM pages WHERE slug=?', slug);
+if (!p) return new Response(null, { status: 404 });
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  run('UPDATE pages SET title=?, description=?, h1=?, html=?, updated_at=? WHERE slug=?', str(fd, 'title'), str(fd, 'description'), str(fd, 'h1'), String(fd.get('html') || ''), now(), slug);
+  audit(u.login, 'update', 'page', slug);
+  return Astro.redirect(back(Astro.url.pathname, 'ok', 'Сохранено'));
+}
+---
+<AdminLayout title={`Страница: ${p.h1}`}>
+  <a href="/admin/pages/" class="mb-4 inline-block text-sm font-semibold text-brand">← Все страницы</a>
+  <form method="post" class="grid max-w-6xl gap-5 xl:grid-cols-[1.8fr_1fr]">
+    <section class="space-y-4 rounded-2xl border border-line bg-white p-6">
+      <label class="grid gap-1.5 text-sm font-semibold">Заголовок H1<input name="h1" value={p.h1} class="field" /></label>
+      <label class="grid gap-1.5 text-sm font-semibold">Текст (HTML)<textarea name="html" rows="28" class="field font-mono text-[13px] leading-relaxed" spellcheck="false">{p.html}</textarea></label>
+    </section>
+    <aside class="space-y-4 rounded-2xl border border-line bg-white p-6 self-start">
+      <label class="grid gap-1.5 text-sm font-semibold">Title<textarea name="title" rows="3" class="field">{p.title}</textarea></label>
+      <label class="grid gap-1.5 text-sm font-semibold">Description<textarea name="description" rows="4" class="field">{p.description}</textarea></label>
+      <button class="btn btn-primary w-full">Сохранить</button>
+      <a href={`/${slug}/`} target="_blank" class="block text-center text-sm text-ink-soft underline">Посмотреть на сайте ↗</a>
+      <p class="text-xs text-ink-soft">Изменено: {fmtDate(p.updated_at)}</p>
+    </aside>
+  </form>
+</AdminLayout>

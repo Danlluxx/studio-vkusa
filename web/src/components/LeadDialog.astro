@@ -1,0 +1,42 @@
+---
+---
+<dialog id="lead-dialog" class="m-auto w-[min(520px,calc(100vw-24px))] rounded-[28px] bg-cream p-0 text-ink shadow-2xl backdrop:bg-ink/60 backdrop:backdrop-blur-sm">
+  <form id="lead-form" class="grid gap-4 p-6 sm:p-8" novalidate>
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <p class="eyebrow">Смета за 1 рабочий день</p>
+        <h2 class="mt-1 text-3xl font-semibold">Рассчитать мероприятие</h2>
+      </div>
+      <button type="button" data-close class="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-ink/15 hover:bg-ink hover:text-white" aria-label="Закрыть">✕</button>
+    </div>
+    <input name="website" tabindex="-1" autocomplete="off" class="hidden" aria-hidden="true" />
+    <label class="grid gap-1.5 text-sm font-semibold">Имя
+      <input required name="name" autocomplete="name" class="field" placeholder="Как к вам обращаться" />
+    </label>
+    <label class="grid gap-1.5 text-sm font-semibold">Телефон
+      <input required name="phone" type="tel" inputmode="tel" autocomplete="tel" class="field" placeholder="+7 ___ ___-__-__" />
+    </label>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="grid gap-1.5 text-sm font-semibold">Дата
+        <input name="date" type="date" class="field" />
+      </label>
+      <label class="grid gap-1.5 text-sm font-semibold">Гостей
+        <input name="guests" type="number" min="1" inputmode="numeric" class="field" placeholder="20" />
+      </label>
+    </div>
+    <label class="grid gap-1.5 text-sm font-semibold">Пожелания
+      <textarea name="comment" rows="3" class="field" placeholder="Формат, площадка, бюджет"></textarea>
+    </label>
+    <p id="lead-items" class="hidden rounded-2xl bg-brand-soft px-4 py-3 text-sm"></p>
+    <label class="flex items-start gap-3 text-xs leading-relaxed text-ink-soft">
+      <input type="checkbox" required name="consent" class="mt-0.5 h-4 w-4 accent-[#d01414]" />
+      <span>Согласен на обработку персональных данных согласно <a class="underline" href="/politika-v-otnoshenii-personalnykh-dannykh/" target="_blank">политике конфиденциальности</a></span>
+    </label>
+    <button class="btn btn-primary w-full" type="submit">Отправить заявку</button>
+    <p id="lead-status" class="min-h-5 text-center text-sm" role="status"></p>
+  </form>
+</dialog>
+<style is:global>
+  dialog[open] { animation: pop .25s ease; }
+  @keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+</style>

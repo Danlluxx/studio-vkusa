@@ -1,0 +1,13 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { all } from '../../../lib/db';
+import { fmtDate } from '../../../lib/admin';
+const rows = all<any>('SELECT slug,title,h1,updated_at,length(html) n FROM pages ORDER BY slug');
+---
+<AdminLayout title="Текстовые страницы">
+  <p class="mb-5 max-w-3xl text-sm text-ink-soft">«О нас», «Доставка и оплата», оферта, политика конфиденциальности. Тексты редактируются как HTML (заголовки <code>&lt;h2&gt;</code>, абзацы <code>&lt;p&gt;</code>, списки <code>&lt;ul&gt;</code>).</p>
+  <div class="overflow-x-auto rounded-2xl border border-line bg-white">
+    <table class="w-full min-w-[600px] text-sm"><thead class="bg-cream/60 text-left text-xs uppercase tracking-wider text-ink-soft"><tr><th class="p-3">Страница</th><th class="p-3">Адрес</th><th class="p-3">Размер</th><th class="p-3">Изменена</th><th class="p-3"></th></tr></thead>
+      <tbody class="divide-y divide-line">{rows.map((r) => <tr class="hover:bg-cream/50"><td class="p-3 font-semibold">{r.h1}</td><td class="p-3 font-mono text-xs"><a href={`/${r.slug}/`} target="_blank" class="text-ink-soft hover:text-brand">/{r.slug}/ ↗</a></td><td class="p-3 text-xs text-ink-soft">{Math.round(r.n / 1000)} КБ</td><td class="p-3 text-xs text-ink-soft">{fmtDate(r.updated_at)}</td><td class="p-3 text-right"><a href={`/admin/pages/${r.slug}/`} class="btn btn-ghost !px-4 !py-1.5">Редактировать</a></td></tr>)}</tbody></table>
+  </div>
+</AdminLayout>

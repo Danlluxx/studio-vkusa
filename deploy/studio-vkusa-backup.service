@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up Studio Vkusa database and uploads
+Requires=studio-vkusa.service
+After=studio-vkusa.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/studio-vkusa-backup

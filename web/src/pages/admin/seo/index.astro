@@ -1,0 +1,50 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { all, run, audit } from '../../../lib/db';
+import { str, back } from '../../../lib/admin';
+const u = Astro.locals.user!;
+const norm = (p: string) => { p = p.trim(); if (!p.startsWith('/')) p = '/' + p; return p; };
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData(), act = str(fd, 'action');
+  try {
+    if (act === 'seo_save') { const path = norm(str(fd, 'path')); run('INSERT INTO seo (path,title,description,noindex) VALUES (?,?,?,?) ON CONFLICT(path) DO UPDATE SET title=excluded.title, description=excluded.description, noindex=excluded.noindex', path, str(fd, 'title'), str(fd, 'description'), str(fd, 'noindex') ? 1 : 0); audit(u.login, 'seo_save', 'seo', path); }
+    if (act === 'seo_delete') { run('DELETE FROM seo WHERE path=?', str(fd, 'path')); audit(u.login, 'seo_delete', 'seo', str(fd, 'path')); }
+    if (act === 'redir_add') { const from = norm(str(fd, 'from')), to = str(fd, 'to'); if (!to) throw new Error('Укажите, куда вести'); if (from === to) throw new Error('Адреса совпадают'); run('INSERT INTO redirects (from_path,to_path,code) VALUES (?,?,?)', from, to, str(fd, 'code') === '302' ? 302 : 301); audit(u.login, 'redirect_add', 'redirect', from, { to }); }
+    if (act === 'redir_delete') { run('DELETE FROM redirects WHERE id=?', Number(str(fd, 'id'))); audit(u.login, 'redirect_delete', 'redirect', str(fd, 'id')); }
+  } catch (e: any) { return Astro.redirect(back('/admin/seo/', 'err', /UNIQUE/.test(e.message) ? 'Такой редирект уже есть' : e.message)); }
+  return Astro.redirect(back('/admin/seo/', 'ok', 'Сохранено'));
+}
+const seo = all<any>('SELECT * FROM seo ORDER BY path'), redirs = all<any>('SELECT * FROM redirects ORDER BY id DESC');
+---
+<AdminLayout title="SEO и редиректы">
+  <div class="grid max-w-6xl gap-6 xl:grid-cols-2">
+    <section class="space-y-4 rounded-2xl border border-line bg-white p-6">
+      <h2 class="font-sans text-[15px] font-bold">Заголовки для отдельных адресов</h2>
+      <p class="text-sm text-ink-soft">Переопределяют Title и Description любой страницы (в том числе разделов меню) и могут закрыть её от индексации. Для страниц форматов и текстов проще править их в своём разделе.</p>
+      {seo.map((s) => (
+        <form method="post" class="grid gap-2 rounded-xl border border-line p-3">
+          <input type="hidden" name="action" value="seo_save" /><input type="hidden" name="path" value={s.path} />
+          <p class="font-mono text-xs font-semibold">{s.path}</p>
+          <input name="title" value={s.title || ''} class="field !py-2" placeholder="Title" /><textarea name="description" rows="2" class="field !py-2" placeholder="Description">{s.description}</textarea>
+          <div class="flex items-center gap-3"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="noindex" checked={!!s.noindex} class="accent-[#d01414]" />Закрыть от индексации</label><button class="btn btn-ghost !px-4 !py-1.5">Сохранить</button><button name="action" value="seo_delete" data-confirm="Убрать правило?" class="ml-auto text-sm text-ink-soft underline hover:text-brand">Убрать</button></div>
+        </form>
+      ))}
+      <form method="post" class="grid gap-2 rounded-xl border border-dashed border-line p-3">
+        <input type="hidden" name="action" value="seo_save" />
+        <input name="path" required class="field !py-2 font-mono text-xs" placeholder="/menu/kanape/" />
+        <input name="title" class="field !py-2" placeholder="Title" /><textarea name="description" rows="2" class="field !py-2" placeholder="Description"></textarea>
+        <div class="flex items-center gap-3"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="noindex" class="accent-[#d01414]" />noindex</label><button class="btn btn-primary !px-4 !py-1.5">Добавить правило</button></div>
+      </form>
+    </section>
+    <section class="space-y-4 rounded-2xl border border-line bg-white p-6">
+      <h2 class="font-sans text-[15px] font-bold">Редиректы</h2>
+      <p class="text-sm text-ink-soft">Нужны при переезде со старого сайта, чтобы сохранить позиции в Яндексе: старый адрес → новый (301 — навсегда).</p>
+      <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-xs text-ink-soft"><tr><th class="pb-2">Откуда</th><th class="pb-2">Куда</th><th class="pb-2">Код</th><th class="pb-2 text-right">Переходов</th><th></th></tr></thead>
+        <tbody class="divide-y divide-line">{redirs.map((r) => <tr><td class="py-2 font-mono text-xs">{r.from_path}</td><td class="py-2 font-mono text-xs">{r.to_path}</td><td class="py-2">{r.code}</td><td class="py-2 text-right tabular-nums">{r.hits}</td><td class="py-2 text-right"><form method="post"><input type="hidden" name="action" value="redir_delete" /><input type="hidden" name="id" value={r.id} /><button class="text-ink-soft hover:text-brand" aria-label="Удалить">✕</button></form></td></tr>)}
+          {!redirs.length && <tr><td colspan="5" class="py-4 text-ink-soft">Редиректов нет</td></tr>}</tbody></table></div>
+      <form method="post" class="flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-line p-3"><input type="hidden" name="action" value="redir_add" />
+        <input name="from" required class="field !py-2 !w-44 font-mono text-xs" placeholder="/catalog/keytering/" /><span>→</span><input name="to" required class="field !py-2 !w-44 font-mono text-xs" placeholder="/menu/" />
+        <select name="code" class="field !py-2 !w-20"><option>301</option><option>302</option></select><button class="btn btn-primary !px-4 !py-2">Добавить</button></form>
+    </section>
+  </div>
+</AdminLayout>

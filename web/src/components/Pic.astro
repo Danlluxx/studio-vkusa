@@ -1,0 +1,15 @@
+---
+import { pic } from '../lib/media';
+interface Props { src?: string | null; alt?: string; sizes?: string; class?: string; eager?: boolean; fit?: 'cover' | 'contain' }
+const { src, alt = '', sizes = '(min-width:1024px) 33vw, 100vw', class: cls = '', eager = false, fit = 'cover' } = Astro.props;
+const p = pic(src);
+---
+{p ? (
+  <picture>
+    {p.avif && <source type="image/avif" srcset={p.avif} sizes={sizes} />}
+    <source type="image/webp" srcset={p.webp} sizes={sizes} />
+    <img src={p.src} alt={alt} width={p.w} height={p.h} sizes={sizes}
+      loading={eager ? 'eager' : 'lazy'} decoding="async" fetchpriority={eager ? 'high' : 'auto'}
+      class:list={['h-full w-full', fit === 'cover' ? 'object-cover' : 'object-contain', cls]} />
+  </picture>
+) : <div class:list={['bg-cream-deep', cls]} aria-hidden="true" />}

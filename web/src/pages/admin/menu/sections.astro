@@ -1,0 +1,55 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { all, run, audit } from '../../../lib/db';
+import { str, back } from '../../../lib/admin';
+
+const u = Astro.locals.user!;
+const translit = (s: string) => s.toLowerCase().replace(/[а-яё]/g, (c) => ({ а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' } as any)[c] || '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  const act = str(fd, 'action'), id = Number(str(fd, 'id'));
+  try {
+    if (act === 'add') { const name = str(fd, 'name'); if (!name) throw new Error('Укажите название'); const code = str(fd, 'code') || translit(name); run('INSERT INTO sections (code,name,parent,sort,active) VALUES (?,?,?,?,1)', code, name, Number(str(fd, 'parent')) || null, Number(str(fd, 'sort')) || 500); audit(u.login, 'create', 'section', code); }
+    if (act === 'save') { run('UPDATE sections SET name=?, code=?, sort=?, active=? WHERE id=?', str(fd, 'name'), str(fd, 'code'), Number(str(fd, 'sort')) || 500, str(fd, 'active') ? 1 : 0, id); audit(u.login, 'update', 'section', id); }
+    if (act === 'delete') { const n = all<any>('SELECT COUNT(*) n FROM items WHERE section=?', id)[0].n; if (n) throw new Error(`В разделе ${n} блюд — сначала перенесите их`); run('DELETE FROM sections WHERE id=?', id); audit(u.login, 'delete', 'section', id); }
+  } catch (e: any) { return Astro.redirect(back(Astro.url.pathname, 'err', /UNIQUE/.test(e.message) ? 'Раздел с таким адресом уже есть' : e.message)); }
+  return Astro.redirect(back(Astro.url.pathname, 'ok', 'Сохранено'));
+}
+const secs = all<any>('SELECT s.*, (SELECT COUNT(*) FROM items i WHERE i.section=s.id) n FROM sections s ORDER BY (parent IS NOT NULL), sort, name');
+const tops = secs.filter((s) => !s.parent);
+---
+<AdminLayout title="Разделы меню">
+  <a href="/admin/menu/" class="mb-4 inline-block text-sm font-semibold text-brand">← К списку блюд</a>
+  <div class="max-w-4xl space-y-6">
+    <div class="overflow-x-auto rounded-2xl border border-line bg-white">
+      <table class="w-full min-w-[640px] text-sm">
+        <thead class="bg-cream/60 text-left text-xs uppercase tracking-wider text-ink-soft"><tr><th class="p-3">Название</th><th class="p-3">Адрес</th><th class="p-3">Порядок</th><th class="p-3">Блюд</th><th class="p-3">Показ</th><th class="p-3"></th></tr></thead>
+        <tbody class="divide-y divide-line">
+          {tops.flatMap((t) => [t, ...secs.filter((c) => c.parent === t.id)]).map((s) => (
+            <tr>
+              <td class="p-2" colspan="6">
+                <form method="post" class="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="id" value={s.id} />
+                  <input name="name" value={s.name} class:list={['field !py-1.5 flex-1 min-w-40', s.parent && 'ml-6']} />
+                  <input name="code" value={s.code} class="field !w-44 !py-1.5 font-mono text-xs" />
+                  <input name="sort" type="number" value={s.sort} class="field !w-20 !py-1.5" />
+                  <span class="w-12 text-center text-ink-soft">{s.n}</span>
+                  <label class="flex items-center gap-1.5"><input type="checkbox" name="active" checked={!!s.active} class="accent-[#d01414]" /></label>
+                  <button name="action" value="save" class="btn btn-ghost !px-3 !py-1.5">Сохранить</button>
+                  <button name="action" value="delete" data-confirm={`Удалить раздел «${s.name}»?`} class="text-ink-soft hover:text-brand" aria-label="Удалить">✕</button>
+                </form>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <form method="post" class="flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-white p-5">
+      <input type="hidden" name="action" value="add" />
+      <label class="grid gap-1 text-xs font-semibold text-ink-soft">Новый раздел<input name="name" required class="field !py-2 w-60" /></label>
+      <label class="grid gap-1 text-xs font-semibold text-ink-soft">Родитель<select name="parent" class="field !py-2"><option value="">— верхний уровень —</option>{tops.map((t) => <option value={t.id}>{t.name}</option>)}</select></label>
+      <label class="grid gap-1 text-xs font-semibold text-ink-soft">Адрес (необязательно)<input name="code" class="field !py-2 w-44 font-mono text-xs" placeholder="создастся сам" /></label>
+      <button class="btn btn-primary !py-2">Добавить</button>
+    </form>
+  </div>
+</AdminLayout>

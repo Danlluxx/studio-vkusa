@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Studio Vkusa backup at 03:00 Barnaul time
+
+[Timer]
+OnCalendar=*-*-* 20:00:00 UTC
+Persistent=true
+Unit=studio-vkusa-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,44 @@
+---
+import '../../styles/global.css';
+import { one, run, verifyPassword, audit, now } from '../../lib/db';
+import { COOKIE, createSession, tooMany, noteFail, clearFails } from '../../lib/auth';
+
+let error = '';
+const next = Astro.url.searchParams.get('next') || '/admin/';
+const configured = !!one('SELECT 1 FROM users LIMIT 1');
+if (Astro.locals.user) return Astro.redirect('/admin/');
+
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  const ip = Astro.clientAddress;
+  const login = String(fd.get('login') || '').trim().toLowerCase(), pw = String(fd.get('password') || '');
+  if (tooMany(ip)) error = 'Слишком много попыток. Подождите 10 минут.';
+  else {
+    const u = one<any>('SELECT * FROM users WHERE lower(login)=? AND active=1', login);
+    if (u && verifyPassword(pw, u.password_hash)) {
+      clearFails(ip);
+      const token = createSession(u.id, Astro.request.headers.get('user-agent') || '', ip);
+      Astro.cookies.set(COOKIE, token, { path: '/', httpOnly: true, sameSite: 'strict', secure: Astro.url.protocol === 'https:', maxAge: 7 * 86400 });
+      audit(u.login, 'login', 'user', u.id);
+      return Astro.redirect(next.startsWith('/admin') ? next : '/admin/');
+    }
+    noteFail(ip);
+    audit(login || '?', 'login_failed', 'user', undefined, { ip });
+    error = 'Неверный логин или пароль';
+  }
+}
+void run; void now;
+---
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="robots" content="noindex" /><title>Вход — Админка Студии Вкуса</title><link rel="icon" href="/logo-full.png" /></head>
+<body class="grid min-h-screen place-items-center bg-cream px-4">
+  <form method="post" class="w-full max-w-sm rounded-[28px] border border-line bg-white p-8 shadow-card">
+    <img src="/logo-full.png" alt="Студия Вкуса" class="mx-auto h-24 w-24 rounded-full" />
+    <h1 class="mt-4 text-center text-3xl font-semibold">Вход в админку</h1>
+    {!configured && <p class="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Администратор не создан. Задайте <code>ADMIN_PASSWORD</code> в файле <code>.env</code> и перезапустите сайт.</p>}
+    {error && <p role="alert" class="mt-4 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-800">{error}</p>}
+    <label class="mt-6 grid gap-1.5 text-sm font-semibold">Логин<input name="login" class="field" autocomplete="username" required autofocus /></label>
+    <label class="mt-4 grid gap-1.5 text-sm font-semibold">Пароль<input name="password" type="password" class="field" autocomplete="current-password" required /></label>
+    <button class="btn btn-primary mt-6 w-full">Войти</button>
+  </form>
+</body></html>

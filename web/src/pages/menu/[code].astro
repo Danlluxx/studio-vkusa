@@ -1,0 +1,73 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ItemCard from '../../components/ItemCard.astro';
+import { tree } from '../../lib/data';
+const { byCode: sectionByCode, children: childSections, itemsOf, items, top: topSections } = tree();
+
+const { code } = Astro.params;
+const sec = sectionByCode(code ?? '');
+if (!sec) return new Response(null, { status: 404 });
+const root = sec.parent ? sectionByCode(topSections.find((t) => t.id === sec.parent)?.code ?? '') ?? sec : sec;
+const subs = childSections(root.id).filter((c) => items.some((i) => i.section === c.id));
+const all = itemsOf(sec);
+const PER = 24;
+const pages = Math.max(1, Math.ceil(all.length / PER));
+const page = Math.min(pages, Math.max(1, Number(Astro.url.searchParams.get('page')) || 1));
+const list = all.slice((page - 1) * PER, page * PER);
+const base = `/menu/${sec.code}/`;
+const suffix = page > 1 ? ` — страница ${page}` : '';
+const siblings = topSections.filter((t) => itemsOf(t).length);
+---
+<Layout canonical={page > 1 ? `${base}?page=${page}` : base} crumbs={[["Меню", "/menu/"], [sec.name, `/menu/${sec.code}/`]]} title={`${sec.name} — меню и цены${suffix} | Студия Вкуса`} description={`${sec.name}${suffix}: блюда и цены. Выездной кейтеринг в Барнауле — соберите заявку, смета за 1 рабочий день.`}>
+  <section class="section">
+    <div class="container-x">
+      <nav aria-label="Хлебные крошки" class="text-sm text-ink-soft"><a href="/" class="hover:text-brand">Главная</a> / <a href="/menu/" class="hover:text-brand">Меню</a> / {sec.name}</nav>
+      <h1 class="mt-4 text-5xl font-semibold sm:text-7xl">{sec.name}</h1>
+
+      <div class="mt-8 flex flex-wrap gap-2" aria-label="Разделы меню">
+        {siblings.map((t) => <a href={`/menu/${t.code}/`} aria-current={t.id === root.id ? 'page' : undefined} class="rounded-full border border-ink/15 px-4 py-2 text-sm font-semibold transition hover:border-ink aria-[current=page]:border-brand aria-[current=page]:bg-brand aria-[current=page]:text-white">{t.name}</a>)}
+      </div>
+      {subs.length > 0 && (
+        <div class="mt-3 flex flex-wrap gap-2">
+          <a href={`/menu/${root.code}/`} aria-current={sec.id === root.id ? 'page' : undefined} class="rounded-full bg-cream-deep px-4 py-1.5 text-sm font-medium aria-[current=page]:bg-ink aria-[current=page]:text-white">Все</a>
+          {subs.map((c) => <a href={`/menu/${c.code}/`} aria-current={c.id === sec.id ? 'page' : undefined} class="rounded-full bg-cream-deep px-4 py-1.5 text-sm font-medium hover:bg-line aria-[current=page]:bg-ink aria-[current=page]:text-white">{c.name}</a>)}
+        </div>
+      )}
+
+      <div id="menu-grid" class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {list.map((i, n) => <ItemCard item={i} tag="h2" eager={n === 0 && page === 1} />)}
+      </div>
+      {pages > 1 && (
+        <nav class="mt-10 flex flex-col items-center gap-5" aria-label="Страницы раздела">
+          <p class="text-sm text-ink-soft">Показано <b id="shown">{Math.min(page * PER, all.length)}</b> из {all.length}</p>
+          {page < pages && <a id="more" href={`${base}?page=${page + 1}`} class="btn btn-ghost" rel="next">Показать ещё</a>}
+          <ul class="flex flex-wrap justify-center gap-2" id="pager">
+            {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
+              <li><a href={n === 1 ? base : `${base}?page=${n}`} aria-current={n === page ? 'page' : undefined} class="grid h-10 min-w-10 place-items-center rounded-full border border-line px-3 text-sm font-semibold hover:border-ink aria-[current=page]:border-ink aria-[current=page]:bg-ink aria-[current=page]:text-white">{n}</a></li>
+            ))}
+          </ul>
+        </nav>
+      )}
+      {!list.length && <p class="mt-10 text-ink-soft">В этом разделе пока нет блюд.</p>}
+    </div>
+  </section>
+</Layout>
+<script is:inline>
+  (function () {
+    var more = document.getElementById('more'), grid = document.getElementById('menu-grid');
+    if (!more || !grid) return;
+    more.addEventListener('click', function (e) {
+      e.preventDefault();
+      var href = more.getAttribute('href'); more.textContent = 'Загружаем…'; more.setAttribute('aria-busy', 'true');
+      fetch(href).then(function (r) { return r.text(); }).then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        doc.querySelectorAll('#menu-grid > *').forEach(function (n) { grid.appendChild(document.importNode(n, true)); });
+        var next = doc.getElementById('more');
+        if (next) { more.setAttribute('href', next.getAttribute('href')); more.textContent = 'Показать ещё'; more.removeAttribute('aria-busy'); } else more.remove();
+        var shown = doc.getElementById('shown'); if (shown) document.getElementById('shown').textContent = shown.textContent;
+        var pager = document.getElementById('pager'); if (pager) pager.hidden = true;
+        if (window.vkBasket) window.vkBasket.render();
+      }).catch(function () { window.location.href = href; });
+    });
+  })();
+</script>

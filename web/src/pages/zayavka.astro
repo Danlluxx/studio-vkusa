@@ -1,0 +1,38 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Моя заявка — Студия Вкуса" description="Список выбранных блюд для расчёта сметы." noindex>
+  <section class="section">
+    <div class="container-x max-w-3xl">
+      <h1 class="text-5xl font-semibold sm:text-6xl">Моя заявка</h1>
+      <p class="mt-3 text-ink-soft">Блюда, которые вы добавили. Мы рассчитаем смету под ваше число гостей и формат.</p>
+      <ul id="basket-list" class="mt-10 divide-y divide-line border-y border-line"></ul>
+      <p id="basket-empty" class="mt-10 hidden text-lg">Пока ничего не выбрано. <a href="/menu/" class="text-brand underline underline-offset-4">Перейти в меню</a></p>
+      <div id="basket-actions" class="mt-8 hidden flex-wrap gap-3">
+        <button type="button" data-lead class="btn btn-primary">Отправить заявку</button>
+        <a href="/menu/" class="btn btn-ghost">Добавить ещё</a>
+        <button type="button" id="basket-clear" class="btn text-ink-soft hover:text-brand">Очистить</button>
+      </div>
+    </div>
+  </section>
+</Layout>
+<script is:inline>
+  (function () {
+    const list = document.getElementById('basket-list'), empty = document.getElementById('basket-empty'), act = document.getElementById('basket-actions');
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    function draw() {
+      const b = window.vkBasket ? window.vkBasket.read() : {}, ids = Object.keys(b);
+      empty.classList.toggle('hidden', ids.length > 0); act.classList.toggle('hidden', !ids.length); act.classList.toggle('flex', ids.length > 0);
+      list.innerHTML = ids.map((id) => `<li class="flex items-center justify-between gap-4 py-4"><div><p class="font-semibold">${esc(b[id].name)}</p>${b[id].unit ? `<p class="text-sm text-[#5c524c]">${esc(b[id].unit)}</p>` : ''}</div><div class="flex items-center gap-2"><button data-d="${id}" class="grid h-9 w-9 place-items-center rounded-full border border-[#1a1614]/20" aria-label="Меньше">−</button><span class="w-6 text-center font-bold">${b[id].qty}</span><button data-u="${id}" class="grid h-9 w-9 place-items-center rounded-full border border-[#1a1614]/20" aria-label="Больше">+</button></div></li>`).join('');
+    }
+    document.addEventListener('click', (e) => {
+      const d = e.target.closest('[data-d]'), u = e.target.closest('[data-u]');
+      const b = window.vkBasket.read();
+      if (d) { const i = b[d.dataset.d]; if (i) { i.qty--; if (i.qty < 1) delete b[d.dataset.d]; window.vkBasket.write(b); } }
+      if (u) { const i = b[u.dataset.u]; if (i) { i.qty++; window.vkBasket.write(b); } }
+      if (e.target.closest('#basket-clear')) window.vkBasket.write({});
+    });
+    document.addEventListener('basket:change', draw);
+    window.addEventListener('load', draw);
+  })();
+</script>

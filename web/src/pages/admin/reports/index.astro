@@ -1,0 +1,51 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { all, run, audit } from '../../../lib/db';
+import { str, back } from '../../../lib/admin';
+import { pic } from '../../../lib/media';
+import { saveImage, deleteImage } from '../../../lib/uploads';
+const u = Astro.locals.user!;
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData(), act = str(fd, 'action'), id = Number(str(fd, 'id'));
+  try {
+    const file = fd.get('photo') as File | null;
+    if (act === 'add') {
+      if (!str(fd, 'name')) throw new Error('Укажите название');
+      const img = file && file.size ? await saveImage(file) : '';
+      run('INSERT INTO reports (name,preview,image,sort,active) VALUES (?,?,?,?,1)', str(fd, 'name'), str(fd, 'preview'), img, Number(str(fd, 'sort')) || 100);
+      audit(u.login, 'create', 'report');
+    }
+    if (act === 'save') {
+      const cur = all<any>('SELECT image FROM reports WHERE id=?', id)[0];
+      let img = cur?.image || '';
+      if (file && file.size) { const old = img; img = await saveImage(file); deleteImage(old); }
+      run('UPDATE reports SET name=?,preview=?,image=?,sort=?,active=? WHERE id=?', str(fd, 'name'), str(fd, 'preview'), img, Number(str(fd, 'sort')) || 500, str(fd, 'active') ? 1 : 0, id);
+      audit(u.login, 'update', 'report', id);
+    }
+    if (act === 'delete') { const cur = all<any>('SELECT image FROM reports WHERE id=?', id)[0]; if (cur?.image) deleteImage(cur.image); run('DELETE FROM reports WHERE id=?', id); audit(u.login, 'delete', 'report', id); }
+  } catch (e: any) { return Astro.redirect(back('/admin/reports/', 'err', e.message)); }
+  return Astro.redirect(back('/admin/reports/', 'ok', 'Сохранено'));
+}
+const rows = all<any>('SELECT * FROM reports ORDER BY sort, id');
+---
+<AdminLayout title="Фотоотчёты">
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    {rows.map((r) => { const p = pic(r.image); return (
+      <form method="post" enctype="multipart/form-data" class:list={['grid gap-3 rounded-2xl border border-line bg-white p-4', !r.active && 'opacity-60']}>
+        <input type="hidden" name="id" value={r.id} />
+        <div class="aspect-[4/3] overflow-hidden rounded-xl bg-cream-deep">{p && <img src={p.thumb} alt="" class="h-full w-full object-cover" loading="lazy" />}</div>
+        <input name="name" value={r.name} class="field" />
+        <textarea name="preview" rows="2" class="field" placeholder="Подпись">{r.preview}</textarea>
+        <input type="file" name="photo" accept="image/*" class="text-xs" />
+        <div class="flex flex-wrap items-center gap-3"><input name="sort" type="number" value={r.sort} class="field !w-20 !py-1.5" /><label class="flex items-center gap-1.5 text-sm"><input type="checkbox" name="active" checked={!!r.active} class="accent-[#d01414]" />Показывать</label><button name="action" value="save" class="btn btn-ghost !px-4 !py-1.5">Сохранить</button><button name="action" value="delete" data-confirm="Удалить фотоотчёт?" class="ml-auto text-ink-soft hover:text-brand" aria-label="Удалить">✕</button></div>
+      </form>); })}
+    <form method="post" enctype="multipart/form-data" class="grid content-start gap-3 rounded-2xl border border-dashed border-line p-4">
+      <input type="hidden" name="action" value="add" />
+      <h2 class="font-sans text-[15px] font-bold">Новый фотоотчёт</h2>
+      <input name="name" required class="field" placeholder="Например: Фуршет на 50 персон" />
+      <textarea name="preview" rows="2" class="field" placeholder="Подпись (необязательно)"></textarea>
+      <input type="file" name="photo" accept="image/*" class="text-xs" />
+      <button class="btn btn-primary w-fit !py-2">Добавить</button>
+    </form>
+  </div>
+</AdminLayout>

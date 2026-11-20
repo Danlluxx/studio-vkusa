@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+/* Шрифты: урезаны скриптом scripts/subset-fonts.py (нужные символы и насыщенность), font-display: swap */
+@font-face { font-family: "Manrope Variable"; font-style: normal; font-display: swap; font-weight: 400 800; src: url(../fonts/manrope-cyr.woff2) format("woff2-variations"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+2116; }
+@font-face { font-family: "Manrope Variable"; font-style: normal; font-display: swap; font-weight: 400 800; src: url(../fonts/manrope-latin.woff2) format("woff2-variations"); unicode-range: U+0020-007E,U+00A0,U+00AB,U+00B7,U+00BB,U+00D7,U+2010-2015,U+2018-201E,U+2022,U+2026; }
+@font-face { font-family: "Playfair Display Variable"; font-style: normal; font-display: swap; font-weight: 400 700; src: url(../fonts/playfair-cyr.woff2) format("woff2-variations"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+2116; }
+@font-face { font-family: "Playfair Display Variable"; font-style: normal; font-display: swap; font-weight: 400 700; src: url(../fonts/playfair-latin.woff2) format("woff2-variations"); unicode-range: U+0020-007E,U+00A0,U+00AB,U+00B7,U+00BB,U+00D7,U+2010-2015,U+2018-201E,U+2022,U+2026; }
+@font-face { font-family: "Playfair Display Variable"; font-style: italic; font-display: swap; font-weight: 400 700; src: url(../fonts/playfair-cyr-italic.woff2) format("woff2-variations"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+2116; }
+@font-face { font-family: "Playfair Display Variable"; font-style: italic; font-display: swap; font-weight: 400 700; src: url(../fonts/playfair-latin-italic.woff2) format("woff2-variations"); unicode-range: U+0020-007E,U+00A0,U+00AB,U+00B7,U+00BB,U+00D7,U+2010-2015,U+2018-201E,U+2022,U+2026; }
+
+@theme {
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Playfair Display Variable", Georgia, serif;
+
+  /* Фирменные цвета из логотипа */
+  --color-brand: #d01414;
+  --color-brand-dark: #a80f0f;
+  --color-brand-soft: #fbe9e6;
+  --color-ink: #1a1614;
+  --color-ink-soft: #5c524c;
+  --color-cream: #faf5ee;
+  --color-cream-deep: #f1e7da;
+  --color-line: #e7dccd;
+
+  --radius-card: 1.5rem;
+  --shadow-card: 0 1px 2px rgb(26 22 20 / .05), 0 12px 32px -12px rgb(26 22 20 / .18);
+}
+
+html { scroll-behavior: smooth; }
+body { @apply bg-cream text-ink font-sans antialiased; text-rendering: optimizeLegibility; }
+h1, h2, h3 { @apply font-display; letter-spacing: -0.01em; }
+:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 3px; border-radius: 6px; }
+::selection { background: var(--color-brand); color: #fff; }
+
+.container-x { @apply mx-auto w-full max-w-7xl px-5 sm:px-8; }
+.btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-semibold transition duration-200 cursor-pointer select-none; }
+.btn-primary { @apply bg-brand text-white shadow-[0_8px_24px_-8px_rgb(208_20_20/.6)] hover:bg-brand-dark hover:-translate-y-0.5; }
+.btn-ghost { @apply border border-ink/20 text-ink hover:border-ink hover:bg-ink hover:text-white; }
+.btn-wa { @apply border border-[#25d366] text-[#0b6b37] hover:bg-[#25d366] hover:text-white; }
+.field { @apply w-full rounded-2xl border border-line bg-white px-4 py-3 text-[15px] font-normal outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10; }
+.btn-max { @apply border border-[#7b3ff2] text-[#5a28b8] hover:bg-[#7b3ff2] hover:text-white; }
+.btn-tg { @apply border border-[#229ed9] text-[#0b6a96] hover:bg-[#229ed9] hover:text-white; }
+.eyebrow { @apply font-display italic text-brand text-lg; }
+.section { @apply py-16 sm:py-24; }
+.h2 { @apply text-3xl sm:text-5xl font-semibold leading-[1.1] text-balance; }
+
+/* Плавное появление */
+@media (prefers-reduced-motion: no-preference) {
+  .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
+  .js .reveal.in { opacity: 1; transform: none; }
+}
+
+/* Текстовые страницы (контент из Битрикса) */
+.prose-vk { @apply text-[17px] leading-8 text-ink; }
+.prose-vk h1, .prose-vk h2, .prose-vk h3, .prose-vk h4 { @apply font-display font-semibold mt-10 mb-4 leading-tight; }
+.prose-vk h2 { @apply text-3xl; } .prose-vk h3 { @apply text-2xl; }
+.prose-vk p { @apply my-4; }
+.prose-vk ul { @apply my-4 list-disc pl-6; } .prose-vk ol { @apply my-4 list-decimal pl-6; }
+.prose-vk li { @apply my-1.5; }
+.prose-vk a { @apply text-brand underline underline-offset-4; }
+.prose-vk img { @apply rounded-card; }
+.prose-vk table { @apply my-6 w-full text-sm; } .prose-vk td, .prose-vk th { @apply border border-line p-2 align-top; }
+.prose-vk b, .prose-vk strong { @apply font-bold; }

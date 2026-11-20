@@ -1,0 +1,51 @@
+---
+import { formatList } from '../data/nav';
+const FORMATS = formatList();
+import { SITE, wa, tg, max } from '../lib/site';
+---
+<footer class="mt-24 bg-ink text-white/80">
+  <div class="container-x grid gap-12 py-16 md:grid-cols-[1.3fr_1fr_1fr_1.2fr]">
+    <div>
+      <img src="/logo-256.webp" alt="Студия Вкуса" width="96" height="96" loading="lazy" class="h-24 w-24 rounded-full bg-white object-contain p-1" />
+      <p class="mt-5 max-w-xs text-sm leading-relaxed">Выездной кейтеринг в Барнауле: фуршеты, банкеты, кофе-брейки и свадьбы под ключ.</p>
+    </div>
+    <nav aria-label="Форматы">
+      <h3 class="font-sans text-xs font-semibold uppercase tracking-[.14em] text-white/50">Форматы</h3>
+      <ul class="mt-4 space-y-2.5 text-[15px]">
+        {FORMATS.map((f) => <li><a class="hover:text-white" href={`/${f.slug}/`}>{f.name}</a></li>)}
+      </ul>
+    </nav>
+    <nav aria-label="Разделы">
+      <h3 class="font-sans text-xs font-semibold uppercase tracking-[.14em] text-white/50">Сайт</h3>
+      <ul class="mt-4 space-y-2.5 text-[15px]">
+        <li><a class="hover:text-white" href="/menu/">Меню</a></li>
+        <li><a class="hover:text-white" href="/fotootchety/">Фотоотчёты</a></li>
+        <li><a class="hover:text-white" href="/about/">О нас</a></li>
+        <li><a class="hover:text-white" href="/dostavka-i-oplata/">Доставка и оплата</a></li>
+      </ul>
+    </nav>
+    <div class="text-[15px]">
+      <h3 class="font-sans text-xs font-semibold uppercase tracking-[.14em] text-white/50">Контакты</h3>
+      <ul class="mt-4 space-y-2.5">
+        <li><a class="text-lg font-bold text-white" href={SITE.phoneHref}>{SITE.phone}</a></li>
+        <li><a class="hover:text-white" href={`mailto:${SITE.email}`}>{SITE.email}</a></li>
+        <li>{SITE.address}</li>
+        <li class="text-white/60">{SITE.hours}</li>
+        <li class="flex flex-wrap gap-3 pt-2">
+          <a href={wa()} target="_blank" rel="noopener" class="rounded-full border border-white/25 px-4 py-2 text-sm hover:bg-white hover:text-ink">WhatsApp</a>
+          <a href={tg()} target="_blank" rel="noopener" class="rounded-full border border-white/25 px-4 py-2 text-sm hover:bg-white hover:text-ink">Telegram</a>
+          <a href={max()} target="_blank" rel="noopener" class="rounded-full border border-white/25 px-4 py-2 text-sm hover:bg-white hover:text-ink">MAX</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-white/10">
+    <div class="container-x flex flex-wrap justify-between gap-3 py-6 text-xs text-white/50">
+      <span>© {new Date().getFullYear()} Студия Вкуса</span>
+      <span class="flex gap-5">
+        <a href="/politika-v-otnoshenii-personalnykh-dannykh/" class="hover:text-white">Политика конфиденциальности</a>
+        <a href="/publichnaya-oferta/" class="hover:text-white">Публичная оферта</a>
+      </span>
+    </div>
+  </div>
+</footer>

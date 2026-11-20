@@ -1,0 +1,31 @@
+---
+interface Props { data: { d: string; v: number; pv: number; leads: number }[]; height?: number }
+const { data, height = 220 } = Astro.props;
+const W = 900, H = height, P = { l: 36, r: 12, t: 12, b: 26 };
+const max = Math.max(4, ...data.map((x) => Math.max(x.v, x.pv)));
+const nice = Math.ceil(max / 4) * 4;
+const x = (i: number) => P.l + (data.length < 2 ? 0 : (i * (W - P.l - P.r)) / (data.length - 1));
+const y = (v: number) => P.t + (H - P.t - P.b) * (1 - v / nice);
+const path = (k: 'v' | 'pv') => data.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[k]).toFixed(1)}`).join(' ');
+const area = `${path('v')} L${x(data.length - 1)},${y(0)} L${x(0)},${y(0)} Z`;
+const step = Math.max(1, Math.ceil(data.length / 8));
+---
+<svg viewBox={`0 0 ${W} ${H}`} class="w-full" role="img" aria-label="График посещаемости и заявок">
+  {[0, 1, 2, 3, 4].map((i) => <g>
+    <line x1={P.l} x2={W - P.r} y1={y((nice / 4) * i)} y2={y((nice / 4) * i)} stroke="#e7dccd" stroke-dasharray={i ? '3 4' : ''} />
+    <text x={P.l - 6} y={y((nice / 4) * i) + 4} text-anchor="end" font-size="11" fill="#5c524c">{(nice / 4) * i}</text>
+  </g>)}
+  <path d={area} fill="#d01414" opacity=".08" />
+  <path d={path('pv')} fill="none" stroke="#1a1614" stroke-width="1.5" stroke-dasharray="4 4" opacity=".5" />
+  <path d={path('v')} fill="none" stroke="#d01414" stroke-width="2.5" stroke-linejoin="round" />
+  {data.map((p, i) => <g>
+    {p.leads > 0 && <circle cx={x(i)} cy={y(p.v)} r="5" fill="#fff" stroke="#16a34a" stroke-width="2.5"><title>{p.d}: заявок {p.leads}</title></circle>}
+    <rect x={x(i) - 8} y={P.t} width="16" height={H - P.t - P.b} fill="transparent"><title>{`${p.d}: посетителей ${p.v}, просмотров ${p.pv}, заявок ${p.leads}`}</title></rect>
+    {i % step === 0 && <text x={x(i)} y={H - 6} text-anchor="middle" font-size="11" fill="#5c524c">{p.d.slice(8)}.{p.d.slice(5, 7)}</text>}
+  </g>)}
+</svg>
+<div class="mt-2 flex flex-wrap gap-5 text-xs text-ink-soft">
+  <span class="flex items-center gap-2"><i class="h-0.5 w-5 bg-brand"></i>Посетители</span>
+  <span class="flex items-center gap-2"><i class="h-0.5 w-5 border-t-2 border-dashed border-ink/50"></i>Просмотры</span>
+  <span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full border-2 border-green-600 bg-white"></i>День с заявками</span>
+</div>

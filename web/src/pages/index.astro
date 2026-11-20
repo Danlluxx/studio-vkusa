@@ -1,0 +1,276 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Pic from '../components/Pic.astro';
+import ItemCard from '../components/ItemCard.astro';
+import { tree, slider, clients, benefits, getReports, getReviews, clean, itemImage } from '../lib/data';
+import { formatList } from '../data/nav';
+const FORMATS = formatList();
+import { SITE, wa, tg, max } from '../lib/site';
+
+const { items, sections, children } = tree();
+const reports = getReports();
+const reviews = getReviews();
+const byName = (s: string) => items.find((i) => i.name.toLowerCase().includes(s.toLowerCase()));
+const inSection = (code: string, n = 0) => {
+  const sec = sections.find((s) => s.code === code)!;
+  const ids = new Set([sec.id, ...children(sec.id).map((c) => c.id)]);
+  return items.filter((i) => ids.has(i.section as number) && itemImage(i))[n];
+};
+const hero = slider.find((s) => s.id === 2)?.image;
+const heroSide1 = itemImage(byName('ростбифом')!);
+const heroSide2 = itemImage(byName('Паштет из утиной')!);
+const eventPhoto = slider.find((s) => s.id === 1)?.image;
+
+const formatPhoto: Record<string, string | null> = {
+  furshet: itemImage(byName('Брускетта с лососем')!),
+  banket: itemImage(inSection('myaso', 0)),
+  'kofe-breyk': itemImage(byName('Панна-котта')!),
+  korporativ: eventPhoto ?? null,
+  svadba: itemImage(byName('Вяленый хамон')!),
+  'den-rozhdeniya': itemImage(inSection('deserty', 1)),
+};
+
+const popular = items.filter((i) => i.popular && itemImage(i));
+const featured = popular.length >= 4 ? popular.slice(0, 8) : [
+  ...['kanape', 'syry-tartaletki', 'kishi', 'deserty'].flatMap((c) => [0, 1, 2].map((n) => inSection(c, n))),
+].filter(Boolean).slice(0, 8);
+
+const facts = [
+  { v: '2000+', t: 'мероприятий за 5 лет' },
+  { v: 'от 700 ₽', t: 'на гостя' },
+  { v: '20–350', t: 'гостей' },
+  { v: '1 день', t: 'на смету' },
+];
+const steps = [
+  ['Заявка', 'Оставьте заявку на сайте, позвоните или напишите в WhatsApp, Telegram или MAX: дата, место, число гостей.'],
+  ['Смета', 'Подберём меню под бюджет и пришлём подробную смету в течение одного рабочего дня.'],
+  ['Согласование', 'Утвердим состав блюд, сервировку и тайминг. По желанию проведём дегустацию.'],
+  ['Праздник', 'Привезём, накроем, обслужим гостей и уберём площадку после мероприятия.'],
+];
+const faqs = [
+  ['За сколько дней нужно заказывать кейтеринг?', 'Оптимально за 5–7 дней, для больших мероприятий и свадеб — за 2–4 недели. Срочные заказы обсуждаем индивидуально.'],
+  ['Вы выезжаете за пределы Барнаула?', 'Да, работаем в Барнауле и пригородах. Стоимость выезда за город рассчитывается отдельно.'],
+  ['Можно ли изменить меню?', 'Да. Любое меню можно адаптировать: заменить блюда, учесть вегетарианцев и детей.'],
+  ['Предоставляете ли вы посуду и официантов?', 'Да, посуда, текстиль и персонал входят в смету по вашему выбору.'],
+];
+const ld = {
+  '@context': 'https://schema.org', '@type': 'FAQPage',
+  mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+};
+---
+<Layout
+  title="Кейтеринг в Барнауле — фуршеты и банкеты от 700 ₽ | Студия Вкуса"
+  description="Выездной кейтеринг в Барнауле: фуршеты, банкеты, кофе-брейки и фудбоксы от 700 ₽ на гостя. Более 2000 мероприятий за 5 лет. Составим меню под ваш бюджет."
+  ld={ld}
+>
+  <!-- HERO -->
+  <section class="relative overflow-hidden">
+    <div class="container-x grid items-center gap-10 pb-14 pt-10 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:pb-24 lg:pt-16">
+      <div>
+        <p class="eyebrow">Выездной кейтеринг в Барнауле</p>
+        <h1 class="mt-4 text-[2.6rem] font-semibold leading-[1.04] text-balance sm:text-6xl xl:text-7xl">
+          Кейтеринг в Барнауле — <em class="font-medium text-brand">выездные</em> фуршеты и банкеты
+        </h1>
+        <p class="mt-6 max-w-xl text-lg leading-relaxed text-ink-soft">
+          Готовим, привозим, сервируем и обслуживаем гостей там, где вам удобно: в офисе, загородном доме, зале или на природе.
+        </p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <button type="button" data-lead class="btn btn-primary">Рассчитать меню</button>
+          <a href={wa()} target="_blank" rel="noopener" class="btn btn-wa">WhatsApp</a>
+          <a href={tg()} target="_blank" rel="noopener" class="btn btn-tg">Telegram</a>
+          <a href={max()} target="_blank" rel="noopener" class="btn btn-max">MAX</a>
+        </div>
+        <dl class="mt-12 grid max-w-xl grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
+          {facts.map((f) => (
+            <div>
+              <dt class="font-display text-3xl font-semibold text-brand">{f.v}</dt>
+              <dd class="mt-1 text-sm leading-snug text-ink-soft">{f.t}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      <div class="relative mx-auto grid w-full max-w-xl grid-cols-[1.25fr_1fr] grid-rows-[auto_auto] gap-4">
+        <div class="col-span-2 aspect-[16/10] overflow-hidden rounded-[2rem] shadow-card">
+          <Pic src={hero} alt="Фуршетные закуски на сланцевой доске" eager sizes="(min-width:1024px) 560px, 100vw" />
+        </div>
+        <div class="aspect-[4/5] overflow-hidden rounded-[2rem] shadow-card"><Pic src={heroSide1} alt="Канапе с ростбифом" sizes="300px" /></div>
+        <div class="aspect-[4/5] overflow-hidden rounded-[2rem] shadow-card"><Pic src={heroSide2} alt="Тарталетки с паштетом" sizes="260px" /></div>
+        <div class="absolute -left-3 top-8 hidden rotate-[-6deg] rounded-2xl bg-white px-4 py-3 shadow-card sm:block">
+          <p class="font-display text-lg italic leading-tight">смета<br />за 1 день</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ФОРМАТЫ -->
+  <section class="section">
+    <div class="container-x">
+      <p class="eyebrow">Что мы организуем</p>
+      <h2 class="h2 mt-2 max-w-3xl">Форматы кейтеринга под ваш повод</h2>
+      <ul class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {FORMATS.map((f) => (
+          <li class="reveal">
+            <a href={`/${f.slug}/`} class="group relative block aspect-[4/5] overflow-hidden rounded-card bg-ink shadow-card sm:aspect-[5/6]">
+              <Pic src={formatPhoto[f.slug]} alt={f.name} class="transition duration-700 group-hover:scale-105 group-hover:opacity-90" sizes="(min-width:1024px) 33vw, 100vw" />
+              <div class="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/15 to-transparent"></div>
+              <div class="absolute inset-x-0 bottom-0 p-6 text-white">
+                <h3 class="text-3xl font-semibold">{f.name}</h3>
+                <p class="mt-1 text-sm text-white/80">{f.note}</p>
+                <span class="mt-4 inline-flex items-center gap-2 text-sm font-semibold">Подробнее <span aria-hidden="true" class="transition group-hover:translate-x-1">→</span></span>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <!-- МЕНЮ -->
+  <section class="section bg-cream-deep/60">
+    <div class="container-x">
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="eyebrow">Из нашего меню</p>
+          <h2 class="h2 mt-2">Что понравится гостям</h2>
+        </div>
+        <a href="/menu/" class="btn btn-ghost">Всё меню →</a>
+      </div>
+      <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {featured.map((i) => <div class="reveal"><ItemCard item={i!} class="h-full" /></div>)}
+      </div>
+    </div>
+  </section>
+
+  <!-- ПРЕИМУЩЕСТВА -->
+  <section class="section">
+    <div class="container-x grid gap-12 lg:grid-cols-[1fr_1.4fr] lg:gap-20">
+      <div class="lg:sticky lg:top-28 lg:self-start">
+        <p class="eyebrow">Почему «Студия Вкуса»</p>
+        <h2 class="h2 mt-2">Всё, что нужно для праздника — под ключ</h2>
+        <p class="mt-5 max-w-md text-lg text-ink-soft">Свежие продукты, меню специально для вас, квалифицированный персонал и помощь в выборе на каждом этапе.</p>
+        <div class="mt-8 aspect-[4/3] max-w-md overflow-hidden rounded-card shadow-card"><Pic src={eventPhoto} alt="Команда Студии Вкуса на выездном мероприятии" sizes="(min-width:1024px) 40vw, 100vw" /></div>
+      </div>
+      <ol class="grid gap-x-10 sm:grid-cols-2">
+        {benefits.map((b, n) => (
+          <li class="reveal border-t border-line py-7">
+            <span class="font-display text-4xl italic text-brand">{String(n + 1).padStart(2, '0')}</span>
+            <p class="mt-3 text-lg font-semibold leading-snug">{clean(b.preview)}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <!-- КАК ЗАКАЗАТЬ -->
+  <section class="section bg-ink text-white">
+    <div class="container-x">
+      <p class="eyebrow !text-[#ff8a80]">Как это работает</p>
+      <h2 class="h2 mt-2 max-w-2xl">Четыре шага от заявки до праздника</h2>
+      <ol class="mt-12 grid gap-px overflow-hidden rounded-card bg-white/15 sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map(([t, d], n) => (
+          <li class="bg-ink p-7">
+            <span class="font-display text-5xl italic text-[#ff8a80]">{n + 1}</span>
+            <h3 class="mt-4 font-sans text-xl font-bold">{t}</h3>
+            <p class="mt-2 text-[15px] leading-relaxed text-white/70">{d}</p>
+          </li>
+        ))}
+      </ol>
+      <div class="mt-10 flex flex-wrap gap-3">
+        <button type="button" data-lead class="btn btn-primary">Оставить заявку</button>
+        <a href={SITE.phoneHref} class="btn border border-white/30 text-white hover:bg-white hover:text-ink">{SITE.phone}</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ФОТООТЧЁТЫ -->
+  <section class="section">
+    <div class="container-x">
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="eyebrow">Фотоотчёты</p>
+          <h2 class="h2 mt-2">Как проходят наши мероприятия</h2>
+        </div>
+        <a href="/fotootchety/" class="btn btn-ghost">Все отчёты →</a>
+      </div>
+      <ul class="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {reports.slice(0, 8).map((r, n) => (
+          <li class:list={['reveal overflow-hidden rounded-card shadow-card', n === 0 && 'col-span-2 row-span-2']}>
+            <a href="/fotootchety/" class="group relative block h-full min-h-44">
+              <Pic src={r.image} alt="" class="aspect-square transition duration-700 group-hover:scale-105" sizes="(min-width:1024px) 25vw, 50vw" />
+              <span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/80 to-transparent p-4 text-sm font-semibold text-white">{r.name}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <!-- ОТЗЫВЫ -->
+  {reviews.length > 0 && (
+    <section class="section bg-cream-deep/60">
+      <div class="container-x">
+        <p class="eyebrow">Отзывы</p>
+        <h2 class="h2 mt-2">Отзывы наших гостей</h2>
+        <ul class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {reviews.map((r) => (
+            <li class="reveal rounded-card bg-white p-7 shadow-card">
+              <p class="text-amber-500" aria-label={`Оценка ${r.rating} из 5`}>{'★'.repeat(r.rating)}<span class="text-ink/15">{'★'.repeat(5 - r.rating)}</span></p>
+              <blockquote class="mt-3 text-[17px] leading-relaxed">{r.text}</blockquote>
+              <p class="mt-5 text-sm"><b>{r.name}</b>{r.event && <span class="text-ink-soft">, {r.event}</span>}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )}
+
+  <!-- КЛИЕНТЫ -->
+  <section class="pb-8">
+    <div class="container-x">
+      <p class="text-center text-sm font-semibold uppercase tracking-[.14em] text-ink-soft">Нам доверяют</p>
+      <ul class="mt-8 grid grid-cols-2 items-center gap-x-8 gap-y-6 sm:grid-cols-5">
+        {clients.map((c) => (
+          <li class="flex h-20 items-center justify-center"><Pic src={c.image} alt="Клиент Студии Вкуса" fit="contain" class="max-h-16 w-auto opacity-70 grayscale transition hover:opacity-100 hover:grayscale-0" sizes="200px" /></li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section">
+    <div class="container-x grid gap-10 lg:grid-cols-[1fr_1.5fr]">
+      <div>
+        <p class="eyebrow">Вопросы</p>
+        <h2 class="h2 mt-2">Частые вопросы</h2>
+      </div>
+      <div class="divide-y divide-line border-y border-line">
+        {faqs.map(([q, a]) => (
+          <details class="group py-5">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-6 text-lg font-semibold">
+              {q}<span aria-hidden="true" class="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-ink/20 transition group-open:rotate-45">+</span>
+            </summary>
+            <p class="mt-3 max-w-2xl leading-relaxed text-ink-soft">{a}</p>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="pb-4">
+    <div class="container-x">
+      <div class="relative overflow-hidden rounded-[2rem] bg-brand p-8 text-white sm:p-14">
+        <div class="relative z-10 max-w-2xl">
+          <h2 class="text-3xl font-semibold leading-tight sm:text-5xl">Расскажите о празднике — пришлём смету за один рабочий день</h2>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <button type="button" data-lead class="btn bg-white text-brand hover:bg-ink hover:text-white">Рассчитать меню</button>
+            <a href={wa()} target="_blank" rel="noopener" class="btn border border-white/60 text-white hover:bg-white hover:text-brand">WhatsApp</a>
+            <a href={tg()} target="_blank" rel="noopener" class="btn border border-white/60 text-white hover:bg-white hover:text-brand">Telegram</a>
+            <a href={max()} target="_blank" rel="noopener" class="btn border border-white/60 text-white hover:bg-white hover:text-brand">MAX</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>

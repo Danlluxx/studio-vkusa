@@ -1,0 +1,23 @@
+---
+import Pic from './Pic.astro';
+import { clean, itemImage, rub, type Item } from '../lib/data';
+interface Props { item: Item; class?: string; eager?: boolean; tag?: 'h2' | 'h3' }
+const { item, class: cls = '', eager = false, tag: Tag = 'h3' } = Astro.props;
+const note = [clean(item.preview), item.priceText && clean(item.priceText)].filter(Boolean).join(' · ');
+---
+<article class:list={['group flex flex-col overflow-hidden rounded-card bg-white shadow-card', cls]}>
+  <div class="aspect-[4/3] overflow-hidden bg-cream-deep">
+    <Pic src={itemImage(item)} alt="" eager={eager} sizes="(min-width:1024px) 25vw, (min-width:640px) 45vw, 90vw" class="transition duration-700 group-hover:scale-105" />
+  </div>
+  <div class="flex flex-1 flex-col gap-2 p-5">
+    <Tag class="font-sans text-[17px] font-bold leading-snug">{item.name}</Tag>
+    {note && <p class="text-sm text-ink-soft">{note}</p>}
+    <div class="mt-auto flex items-center justify-between gap-3 pt-3">
+      <span class="text-xl font-bold">{rub(item.price)}</span>
+      <button type="button" data-add={item.id} data-name={item.name} data-unit={item.priceText || ''}
+        class="rounded-full border border-brand px-4 py-2 text-sm font-semibold text-brand transition hover:bg-brand hover:text-white [&.is-in]:bg-brand [&.is-in]:text-white">
+        <span data-label>В заявку</span>
+      </button>
+    </div>
+  </div>
+</article>

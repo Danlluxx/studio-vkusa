@@ -1,0 +1,39 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { all, run, audit, now } from '../../../lib/db';
+import { str, back, fmtDate } from '../../../lib/admin';
+const u = Astro.locals.user!;
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData(), act = str(fd, 'action'), id = Number(str(fd, 'id'));
+  if (act === 'add' || act === 'save') {
+    if (!str(fd, 'name') || !str(fd, 'text')) return Astro.redirect(back('/admin/reviews/', 'err', 'Укажите имя и текст отзыва'));
+    const v = [str(fd, 'name'), str(fd, 'event'), str(fd, 'text'), Math.min(5, Math.max(1, Number(str(fd, 'rating')) || 5)), Number(str(fd, 'sort')) || 500, str(fd, 'active') ? 1 : 0];
+    if (act === 'add') run('INSERT INTO reviews (name,event,text,rating,sort,active,created_at) VALUES (?,?,?,?,?,?,?)', ...v, now());
+    else run('UPDATE reviews SET name=?,event=?,text=?,rating=?,sort=?,active=? WHERE id=?', ...v, id);
+    audit(u.login, act, 'review', id || undefined);
+  }
+  if (act === 'delete') { run('DELETE FROM reviews WHERE id=?', id); audit(u.login, 'delete', 'review', id); }
+  return Astro.redirect(back('/admin/reviews/', 'ok', 'Сохранено'));
+}
+const rows = all<any>('SELECT * FROM reviews ORDER BY sort, id');
+---
+<AdminLayout title="Отзывы">
+  <p class="mb-5 max-w-3xl text-sm text-ink-soft">Блок «Отзывы наших гостей» появится на главной, как только будет хотя бы один включённый отзыв. Публикуйте только с согласия клиента и не меняйте смысл.</p>
+  <div class="max-w-4xl space-y-4">
+    {rows.map((r) => (
+      <form method="post" class="grid gap-3 rounded-2xl border border-line bg-white p-5">
+        <input type="hidden" name="id" value={r.id} />
+        <div class="grid gap-3 sm:grid-cols-[1fr_1fr_90px_90px]"><input name="name" value={r.name} class="field" placeholder="Имя" /><input name="event" value={r.event || ''} class="field" placeholder="Повод: корпоратив, свадьба…" /><input name="rating" type="number" min="1" max="5" value={r.rating} class="field" title="Оценка" /><input name="sort" type="number" value={r.sort} class="field" title="Порядок" /></div>
+        <textarea name="text" rows="3" class="field">{r.text}</textarea>
+        <div class="flex flex-wrap items-center gap-4"><label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="active" checked={!!r.active} class="accent-[#d01414]" />Показывать</label><button name="action" value="save" class="btn btn-ghost !py-1.5">Сохранить</button><button name="action" value="delete" data-confirm="Удалить отзыв?" class="ml-auto text-sm text-ink-soft underline hover:text-brand">Удалить</button></div>
+      </form>
+    ))}
+    <form method="post" class="grid gap-3 rounded-2xl border border-dashed border-line p-5">
+      <input type="hidden" name="action" value="add" /><input type="hidden" name="active" value="1" />
+      <h2 class="font-sans text-[15px] font-bold">Новый отзыв</h2>
+      <div class="grid gap-3 sm:grid-cols-[1fr_1fr_90px]"><input name="name" required class="field" placeholder="Имя" /><input name="event" class="field" placeholder="Повод" /><input name="rating" type="number" min="1" max="5" value="5" class="field" /></div>
+      <textarea name="text" rows="3" required class="field" placeholder="Текст отзыва, 2–4 предложения"></textarea>
+      <button class="btn btn-primary w-fit">Добавить</button>
+    </form>
+  </div>
+</AdminLayout>

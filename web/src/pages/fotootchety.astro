@@ -1,0 +1,26 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Pic from '../components/Pic.astro';
+import { getReports, clean } from '../lib/data';
+const reports = getReports();
+---
+<Layout crumbs={[["Фотоотчёты", "/fotootchety/"]]} title="Фотоотчёты с мероприятий — Студия Вкуса" description="Фотоотчёты: фуршеты, банкеты, свадьбы и кофе-брейки, которые мы организовали в Барнауле.">
+  <section class="section">
+    <div class="container-x">
+      <nav aria-label="Хлебные крошки" class="text-sm text-ink-soft"><a href="/" class="hover:text-brand">Главная</a> <span aria-hidden="true">/</span> Фотоотчёты</nav>
+      <h1 class="mt-4 text-5xl font-semibold sm:text-7xl">Фотоотчёты</h1>
+      <p class="mt-4 max-w-2xl text-lg text-ink-soft">Как проходят мероприятия, которые мы обслуживаем.</p>
+      <ul class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {reports.map((r) => (
+          <li class="overflow-hidden rounded-card bg-white shadow-card">
+            <div class="aspect-[4/3] overflow-hidden"><Pic src={r.image} alt="" sizes="(min-width:1024px) 33vw, 100vw" /></div>
+            <div class="p-5">
+              <h2 class="font-sans text-lg font-bold leading-snug">{r.name}</h2>
+              {clean(r.preview) && <p class="mt-2 line-clamp-3 text-sm text-ink-soft">{clean(r.preview).replace(/#\S+/g, '').trim()}</p>}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+</Layout>

@@ -1,0 +1,34 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Pic from '../../components/Pic.astro';
+import { tree, itemImage } from '../../lib/data';
+const { top, itemsOf } = tree();
+
+const cats = top
+  .map((s) => ({ s, list: itemsOf(s) }))
+  .filter((c) => c.list.length)
+  .map((c) => ({ ...c, img: c.s.picture ?? itemImage(c.list[0]) }));
+---
+<Layout crumbs={[["Меню", "/menu/"]]} title="Меню и цены — кейтеринг в Барнауле | Студия Вкуса" description="Фуршетное меню, банкетные блюда, фудбоксы и food-станции с ценами. Соберите заявку из любимых блюд — мы пришлём смету за 1 рабочий день.">
+  <section class="section">
+    <div class="container-x">
+      <nav aria-label="Хлебные крошки" class="text-sm text-ink-soft"><a href="/" class="hover:text-brand">Главная</a> <span aria-hidden="true">/</span> Меню</nav>
+      <h1 class="mt-4 text-5xl font-semibold sm:text-7xl">Меню</h1>
+      <p class="mt-4 max-w-2xl text-lg text-ink-soft">Выбирайте блюда и добавляйте в заявку — мы рассчитаем смету под ваш формат и число гостей.</p>
+      <ul class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {cats.map(({ s, list, img }) => (
+          <li>
+            <a href={`/menu/${s.code}/`} class="group relative block aspect-[4/3] overflow-hidden rounded-card bg-ink shadow-card">
+              <Pic src={img} alt={s.name} class="transition duration-700 group-hover:scale-105" sizes="(min-width:1024px) 33vw, 100vw" />
+              <div class="absolute inset-0 bg-gradient-to-t from-ink/80 to-transparent"></div>
+              <div class="absolute inset-x-0 bottom-0 flex items-end justify-between p-6 text-white">
+                <h2 class="text-3xl font-semibold">{s.name}</h2>
+                <span class="rounded-full bg-white/20 px-3 py-1 text-sm backdrop-blur">{list.length} поз.</span>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+</Layout>

@@ -1,0 +1,91 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Pic from '../components/Pic.astro';
+import { getFormats, getItems, itemImage } from '../lib/data';
+import { formatList } from '../data/nav';
+const FORMATS = formatList();
+import { SITE, wa, tg, max } from '../lib/site';
+
+const { slug } = Astro.params;
+const f = getFormats()[slug ?? ''];
+const items = getItems();
+if (!f) return new Response(null, { status: 404 });
+
+const byName = (s: string) => items.find((i) => i.name.toLowerCase().includes(s.toLowerCase()));
+const photoBySlug: Record<string, string | undefined> = {
+  furshet: 'Брускетта с лососем', banket: 'Галантин', 'kofe-breyk': 'Панна-котта',
+  korporativ: 'Канапе с креветкой', svadba: 'Вяленый хамон', 'den-rozhdeniya': 'Киш с вишней',
+};
+const photo = itemImage(byName(photoBySlug[slug!] ?? '') ?? items[0]);
+const others = FORMATS.filter((o) => o.slug !== slug);
+const ld = {
+  '@context': 'https://schema.org', '@type': 'FAQPage',
+  mainEntity: f.faq.map(([q, a]: string[]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+};
+---
+<Layout title={f.title} description={f.description} ld={ld} crumbs={[[f.name, `/${slug}/`]]}>
+  <section class="pt-8 sm:pt-14">
+    <div class="container-x grid items-center gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
+      <div>
+        <nav aria-label="Хлебные крошки" class="text-sm text-ink-soft"><a href="/" class="hover:text-brand">Главная</a> <span aria-hidden="true">/</span> {f.name}</nav>
+        <h1 class="mt-5 text-4xl font-semibold leading-[1.05] text-balance sm:text-6xl">{f.h1}</h1>
+        <p class="mt-6 max-w-xl text-lg leading-relaxed text-ink-soft">{f.intro}</p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <button type="button" data-lead data-lead-note={`Формат: ${f.name}`} class="btn btn-primary">Рассчитать смету</button>
+          <a href={wa(`Здравствуйте! Интересует: ${f.name.toLowerCase()}`)} target="_blank" rel="noopener" class="btn btn-wa">WhatsApp</a>
+          <a href={tg()} target="_blank" rel="noopener" class="btn btn-tg">Telegram</a>
+          <a href={max()} target="_blank" rel="noopener" class="btn btn-max">MAX</a>
+          <a href={SITE.phoneHref} class="btn btn-ghost">{SITE.phone}</a>
+        </div>
+      </div>
+      <div class="aspect-[4/3] overflow-hidden rounded-[2rem] shadow-card"><Pic src={photo} alt={f.name} eager sizes="(min-width:1024px) 45vw, 100vw" /></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container-x grid gap-14 lg:grid-cols-2">
+      <div>
+        <h2 class="h2">{f.include_title}</h2>
+        <ul class="mt-8 divide-y divide-line border-y border-line">
+          {f.include.map((i: string) => (
+            <li class="flex gap-4 py-4 text-[17px]"><span class="mt-1 text-brand" aria-hidden="true">✦</span>{i}</li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h2 class="h2">{f.price_title}</h2>
+        <p class="mt-8 text-[17px] leading-8 text-ink-soft">{f.price}</p>
+        <h2 class="h2 mt-14">{f.steps_title}</h2>
+        <ol class="mt-8 space-y-5">
+          {f.steps.map((s: string, n: number) => (
+            <li class="flex gap-5"><span class="font-display text-4xl italic leading-none text-brand">{n + 1}</span><span class="pt-1 text-[17px] leading-relaxed">{s}</span></li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="section bg-cream-deep/60">
+    <div class="container-x grid gap-10 lg:grid-cols-[1fr_1.5fr]">
+      <div><p class="eyebrow">Вопросы</p><h2 class="h2 mt-2">Частые вопросы</h2></div>
+      <div class="divide-y divide-line border-y border-line">
+        {f.faq.map(([q, a]: string[]) => (
+          <details class="group py-5">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-6 text-lg font-semibold">{q}<span aria-hidden="true" class="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-ink/20 transition group-open:rotate-45">+</span></summary>
+            <p class="mt-3 max-w-2xl leading-relaxed text-ink-soft">{a}</p>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container-x">
+      <h2 class="h2">Другие форматы</h2>
+      <ul class="mt-8 flex flex-wrap gap-3">
+        {others.map((o) => <li><a href={`/${o.slug}/`} class="btn btn-ghost">{o.name}</a></li>)}
+        <li><a href="/menu/" class="btn btn-ghost">Меню и цены</a></li>
+      </ul>
+    </div>
+  </section>
+</Layout>

@@ -1,0 +1,100 @@
+---
+import '../styles/global.css';
+import { can } from '../lib/auth';
+import { newLeadsCount, liveNow } from '../lib/analytics';
+import { flash } from '../lib/admin';
+
+interface Props { title: string; active?: string }
+const { title, active = '' } = Astro.props;
+const user = Astro.locals.user!;
+const f = flash(Astro.url);
+const newLeads = can(user.role, '/admin/leads/') ? newLeadsCount() : 0;
+const live = liveNow();
+
+const NAV: { group: string; items: { href: string; label: string; icon: string; badge?: number }[] }[] = [
+  { group: 'Обзор', items: [
+    { href: '/admin/', label: 'Аналитика', icon: 'M3 3v18h18M7 15l4-4 3 3 5-6' },
+    { href: '/admin/leads/', label: 'Заявки', icon: 'M4 5h16v12H8l-4 4V5z', badge: newLeads },
+  ] },
+  { group: 'Контент', items: [
+    { href: '/admin/menu/', label: 'Меню и цены', icon: 'M4 6h16M4 12h16M4 18h10' },
+    { href: '/admin/formats/', label: 'Страницы форматов', icon: 'M5 4h14v16H5zM9 9h6M9 13h6' },
+    { href: '/admin/pages/', label: 'Текстовые страницы', icon: 'M7 3h8l4 4v14H7zM15 3v4h4' },
+    { href: '/admin/reviews/', label: 'Отзывы', icon: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z' },
+    { href: '/admin/reports/', label: 'Фотоотчёты', icon: 'M4 7h4l2-3h4l2 3h4v12H4zM12 17a3.5 3.5 0 100-7 3.5 3.5 0 000 7z' },
+    { href: '/admin/media/', label: 'Медиатека', icon: 'M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4' },
+  ] },
+  { group: 'Продвижение', items: [
+    { href: '/admin/seo/', label: 'SEO и редиректы', icon: 'M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-5-5' },
+  ] },
+  { group: 'Система', items: [
+    { href: '/admin/users/', label: 'Пользователи', icon: 'M16 11a4 4 0 10-8 0 4 4 0 008 0zM4 21c1-4 4-6 8-6s7 2 8 6' },
+    { href: '/admin/settings/', label: 'Настройки', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19 12l2-1-2-4-2 1-2-1-1-2h-4l-1 2-2 1-2-1-2 4 2 1v2l-2 1 2 4 2-1 2 1 1 2h4l1-2 2-1 2 1 2-4-2-1z' },
+    { href: '/admin/audit/', label: 'Журнал действий', icon: 'M5 4h14v16H5zM9 8h6M9 12h6M9 16h3' },
+  ] },
+];
+---
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>{title} — Админка Студии Вкуса</title>
+  <link rel="icon" href="/logo-full.png" />
+</head>
+<body class="bg-[#f6f1ea]">
+  <input type="checkbox" id="nav-toggle" class="peer hidden" />
+  <div class="min-h-screen lg:grid lg:grid-cols-[256px_1fr]">
+    <aside class="fixed inset-y-0 left-0 z-40 w-64 -translate-x-full overflow-y-auto border-r border-line bg-white p-4 transition peer-checked:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0">
+      <a href="/admin/" class="flex items-center gap-3 px-2 py-2">
+        <img src="/logo-full.png" alt="" class="h-11 w-11 rounded-full" /><span class="font-display text-lg font-semibold leading-tight">Студия Вкуса<br /><span class="font-sans text-[11px] font-medium uppercase tracking-wider text-ink-soft">панель управления</span></span>
+      </a>
+      <nav class="mt-5 space-y-5" aria-label="Разделы админки">
+        {NAV.map((g) => {
+          const items = g.items.filter((i) => can(user.role, i.href));
+          return items.length > 0 && (
+            <div>
+              <p class="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[.12em] text-ink-soft/70">{g.group}</p>
+              {items.map((i) => (
+                <a href={i.href} aria-current={(i.href === '/admin/' ? Astro.url.pathname === '/admin/' : Astro.url.pathname.startsWith(i.href)) ? 'page' : undefined}
+                  class="flex items-center gap-3 rounded-xl px-3 py-2 text-[14px] font-medium text-ink-soft transition hover:bg-cream-deep hover:text-ink aria-[current=page]:bg-brand-soft aria-[current=page]:text-brand">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={i.icon} /></svg>
+                  <span class="flex-1">{i.label}</span>
+                  {!!i.badge && <span class="rounded-full bg-brand px-2 py-0.5 text-xs font-bold text-white">{i.badge}</span>}
+                </a>
+              ))}
+            </div>
+          );
+        })}
+      </nav>
+      <a href="/" target="_blank" class="mt-6 block rounded-xl border border-line px-3 py-2 text-center text-sm font-semibold hover:bg-cream-deep">Открыть сайт ↗</a>
+    </aside>
+    <label for="nav-toggle" class="fixed inset-0 z-30 hidden bg-ink/40 peer-checked:block lg:!hidden" aria-label="Закрыть меню"></label>
+
+    <div class="min-w-0">
+      <header class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-[#f6f1ea]/90 px-4 backdrop-blur lg:px-8">
+        <label for="nav-toggle" class="grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-line bg-white lg:hidden" aria-label="Меню">☰</label>
+        <h1 class="font-sans text-[17px] font-bold">{title}</h1>
+        <span class="ml-auto hidden items-center gap-2 text-xs text-ink-soft sm:flex" title="Посетителей за последние 5 минут"><i class="h-2 w-2 rounded-full bg-emerald-500"></i>Онлайн: <b class="text-ink">{live}</b></span>
+        <a href="/admin/profile/" class="rounded-full border border-line bg-white px-3 py-1.5 text-sm font-semibold hover:bg-cream-deep">{user.name}</a>
+        <form method="post" action="/admin/logout/"><button class="rounded-full px-3 py-1.5 text-sm text-ink-soft hover:text-brand">Выйти</button></form>
+      </header>
+      <main class="px-4 py-6 lg:px-8">
+        {f.ok && <p role="status" class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">{f.ok}</p>}
+        {f.err && <p role="alert" class="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">{f.err}</p>}
+        <slot />
+      </main>
+    </div>
+  </div>
+  <script is:inline>
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-confirm]');
+      if (b && !confirm(b.dataset.confirm)) e.preventDefault();
+    });
+    document.querySelectorAll('input[type=file][data-preview]').forEach((i) => i.addEventListener('change', () => {
+      const t = document.querySelector(i.dataset.preview), f = i.files[0];
+      if (t && f) t.src = URL.createObjectURL(f);
+    }));
+  </script>
+</body>
+</html>

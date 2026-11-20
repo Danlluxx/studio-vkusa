@@ -1,0 +1,7 @@
+---
+import TextPage from '../components/TextPage.astro';
+import { getPage } from '../lib/data';
+const p = getPage('politika-v-otnoshenii-personalnykh-dannykh');
+if (!p) return new Response(null, { status: 404 });
+---
+<TextPage title={p.title} h1={p.h1} description={p.description || p.title} html={p.html} />

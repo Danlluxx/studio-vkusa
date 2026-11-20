@@ -1,0 +1,14 @@
+---
+import Layout from '../layouts/Layout.astro';
+interface Props { title: string; h1?: string; description: string; html: string; wide?: boolean }
+const { title, h1, description, html, wide = false } = Astro.props;
+---
+<Layout title={title} description={description} crumbs={[[h1 ?? title, Astro.url.pathname]]}>
+  <section class="section">
+    <div class:list={['container-x', !wide && 'max-w-4xl']}>
+      <nav aria-label="Хлебные крошки" class="text-sm text-ink-soft"><a href="/" class="hover:text-brand">Главная</a> <span aria-hidden="true">/</span> {h1 ?? title}</nav>
+      <h1 class="mt-4 text-4xl font-semibold sm:text-6xl">{h1 ?? title}</h1>
+      <div class="prose-vk mt-8" set:html={html} />
+    </div>
+  </section>
+</Layout>

@@ -1,0 +1,18 @@
+---
+interface Props { rows: { k: string; v: number; sub?: string; href?: string }[]; empty?: string; color?: string; fmt?: (n: number) => string }
+const { rows, empty = 'Пока нет данных', color = 'bg-brand', fmt = (n: number) => n.toLocaleString('ru-RU') } = Astro.props;
+const max = Math.max(1, ...rows.map((r) => r.v));
+---
+{rows.length ? (
+  <ul class="space-y-2.5">
+    {rows.map((r) => (
+      <li>
+        <div class="flex items-baseline justify-between gap-3 text-sm">
+          {r.href ? <a href={r.href} class="truncate hover:text-brand">{r.k}</a> : <span class="truncate">{r.k}</span>}
+          <span class="shrink-0 tabular-nums font-semibold">{fmt(r.v)}{r.sub && <span class="ml-2 font-normal text-ink-soft">{r.sub}</span>}</span>
+        </div>
+        <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-cream-deep"><div class:list={['h-full rounded-full', color]} style={`width:${(r.v / max) * 100}%`}></div></div>
+      </li>
+    ))}
+  </ul>
+) : <p class="py-4 text-sm text-ink-soft">{empty}</p>}
